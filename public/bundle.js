@@ -4963,8 +4963,12 @@
     const minimumVelocity = 10;
     const accPerClick = 30;
     const slowPerClick = 30;
+    const orbsToCollect = 100;
     function active() {
-        return document.pointerLockElement == canvas;
+        return document.pointerLockElement == canvas && !won();
+    }
+    function won() {
+        return collectedAmount >= orbsToCollect;
     }
     function eject() {
         collectedAmount = Math.max(0, collectedAmount - 5);
@@ -4990,10 +4994,33 @@
             collected[orb] = 1;
         history.push({ pos, time, orb, vel, rot });
     }
+    const penaltySteps = 3;
+    function rewind(steps = -1) {
+        if (steps < 0)
+            steps = penaltySteps;
+        let memoriesRemained = Math.max(1, history.length - penaltySteps);
+        history = history.slice(0, memoriesRemained);
+        let lastMemory = history[history.length - 1];
+        collected = new Uint8Array(1000);
+        collectedAmount = 0;
+        for (let m of history) {
+            if (m.orb >= 0) {
+                collectedAmount++;
+            }
+            collected[m.orb] = 1;
+        }
+        pos = lastMemory.pos;
+        time = lastMemory.time;
+        vel = lastMemory.vel;
+        rot = lastMemory.rot;
+    }
     window.onload = (e) => __awaiter(void 0, void 0, void 0, function* () {
         yield prepareRender(crash, collect, collected);
-        let debugDiv = document.getElementById("debug");
-        canvas.requestPointerLock();
+        let statsDiv = document.getElementById("stats");
+        let orbsDiv = document.getElementById("orbs");
+        let pauseDiv = document.getElementById("pause");
+        let winDiv = document.getElementById("win");
+        //canvas.requestPointerLock();
         const keyboard = new Keyboard(document);
         document.addEventListener("keydown", (e) => {
             if (e.code == "Space") {
@@ -5001,6 +5028,10 @@
                     canvas.requestPointerLock();
                 else
                     document.exitPointerLock();
+            }
+            if (e.code == "KeyR") {
+                rewind(1e6);
+                return;
             }
         });
         canvas.addEventListener("mousedown", e => {
@@ -5029,9 +5060,14 @@
         let dir = [1, 0, 0];
         remember();
         //rewind();
+        let loops = 0;
         function loop(frameTime) {
-            console.log(active());
-            if (!active()) {
+            pauseDiv.style.visibility = !active() && !won() ? "visible" : "hidden";
+            winDiv.style.visibility = won() ? "visible" : "hidden";
+            if (won()) {
+                winDiv.innerHTML = `<h2>Congaturaleishuns!</h2> You have collected <b>${collectedAmount}</b> orbs in <b>${Math.floor(time)} seconds!</b><br/><br/> Press <b>R</b> to restart.`;
+            }
+            if (!active() && loops > 0) {
                 window.requestAnimationFrame(loop);
                 return;
             }
@@ -5053,7 +5089,7 @@
             if (keyboard.pressed["KeyL"]) {
                 vel = Math.max(0, vel - acc * dTime);
             }
-            vel *= (1 - drag * dTime);
+            vel *= 1 - drag * dTime;
             if (vel <= minimumVelocity) {
                 let drop = minimumVelocity - vel / 100;
                 pos[2] -= drop * heightToSpeed;
@@ -5062,8 +5098,12 @@
             let delta = mulScalar(dir, vel * dTime);
             vel -= delta[2] * heightToSpeed;
             pos = add(pos, delta);
-            debugDiv.innerText = `Position: ${pos.map(n => Math.round(n)).join(",")} Time: ${Math.floor(time)} Velocity: ${Math.floor(vel)} Orbs: ${collectedAmount} `;
+            statsDiv.innerText = `Time: ${Math.floor(time)} Position: ${pos
+            .map(n => Math.round(n))
+            .join(",")} Velocity: ${Math.floor(vel)}`;
+            orbsDiv.innerText = `Orbs: ${collectedAmount}/${orbsToCollect}`;
             render(time, pos, dir);
+            loops++;
             window.requestAnimationFrame(loop);
         }
         window.requestAnimationFrame(loop);
