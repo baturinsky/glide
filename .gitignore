@@ -1,3 +1,13 @@
+*.gif
+*.zip
+*.7z
+*.avi
+*.mp4
+
+trash/
+
+.rpt2_cache
+
 # Logs
 logs
 *.log
