@@ -1,0 +1,729 @@
+  <html>
+<head>
+  <meta charset="utf-8" />
+  <link rel="icon" 
+  type="image/png" 
+  href="favicon.png">
+</head>
+<title>Glide</title>
+
+<style>
+  body {
+    margin: 0;
+    font-family: monospace;
+  }
+
+  canvas {
+    position: fixed;
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    image-rendering: pixelated;
+  }
+
+  .stats{
+    font-family: 'Courier New', Courier, monospace;
+    position:fixed;
+    font-size: 18pt;
+    z-index: 10;
+    bottom:0px;
+    left:0px;
+    color: white;
+    width: 100%;
+    text-align: center;
+    text-shadow: 2px 2px 1px black;
+  }
+
+  .orbs{
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 32pt;
+    position:fixed;
+    top:0px;
+    left:0px;
+    width: 100%;
+    text-align: center;
+    z-index: 10;
+    color: white;
+    text-shadow: 2px 2px 1px black;
+  }
+
+  .pause{
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 14pt;
+    position:fixed;
+    top:50px;
+    left:0px;
+    width: calc(100% - 100px);
+    text-align: center;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.8);
+    padding: 0px;
+    margin: 50px;
+    visibility: hidden;
+  }
+
+  .pause > h2{
+    color:pink;
+    text-shadow: 1px 1px 1px black;
+  }
+
+</style>
+</head>
+
+<body>
+  <canvas id="c"></canvas>
+  <div class="orbs" id="orbs"></div>
+  <div class="stats" id="stats"></div>
+  <div class="pause" id="pause">
+    <h2>Marshmallow Sky</h2>
+    <b>Paused</b><br/><br/>
+    Collect black orbs ⚫ as fast as possible.<br/>
+    Turn with with mouse. LMB click to accelerate (costs 1 orb), RMB click to slow down (free).<br/>
+    You also get a "free" speed boost each time you collect an orb. Crashing teleports you up, but costs 5 orbs.<br/>
+    <b>Space</b> toggles pause. R restarts game.<br/>
+    <br/>
+  </div>
+  <div class="pause" id="win"></div>
+</body><script id="geo-f.glsl" type="glsl">#version 300 es
+
+precision highp float;
+precision highp sampler3D;
+
+uniform float u_resolution;
+uniform float u_scale;
+uniform float u_time;
+
+uniform sampler3D u_noise;
+
+in vec4 v_position;
+in vec3 v_normal;
+in vec4 v_color;
+in vec2 v_uv;
+in vec3 v_texcoord; 
+
+layout(location=0) out vec4 outColor;
+layout(location=1) out vec4 outNormal;
+
+float rand(float n){return fract(sin(n) * 43758.5453123);}
+
+float snoise(vec3 v){ 
+  return texture(u_noise, v).r;
+}
+
+void main() {
+
+  float scale =  u_scale / u_resolution;
+
+  vec3 pos = v_texcoord / scale;
+
+  /*if(sin((pos.x*23153.) + (pos.y*21711.) + (pos.z*31893.)+0.1) > -0.9){
+    discard;
+    return;
+  }*/
+
+  if(gl_FrontFacing)
+    pos -= v_normal;
+
+  float d = 0.001;
+  vec3 ipos = vec3(floor(pos.x+d), floor(pos.y+d), floor(pos.z+d));
+  //ipos = pos;
+
+  ipos.z *= 1.5;
+
+  //float simplex = snoise((ipos + vec3(.5) - vec3(0., 0., u_time * 10.)) * scale * 0.04);
+
+  float simplex = snoise(ipos / 500. - vec3(0., 0., u_time * .1)) * scale;
+
+  if(sin(simplex * 20.) * 0.2 - ipos.z * scale * 0.002 < -0.){
+      discard;
+  } else {
+  //outColor = vec4(vec3(v_texcoord.z / u_scale), 1.);
+  outColor = vec4(v_texcoord.zxy / u_scale * 2. - .6, 1.);
+  outNormal = vec4(v_normal * 0.5 + 0.5, 1.);
+  //outNormal = vec4(0., 0., 1., 1.);
+  }    
+
+  
+}</script>
+<script id="lattice-v.glsl" type="glsl">#version 300 es
+precision highp float;
+
+const vec3 normals[6] = vec3[](vec3(1,0,0), vec3(-1,0,0), vec3(0,1,0), vec3(0,-1,0), vec3(0,0,1), vec3(0,0,-1));
+const vec2 uv[4] = vec2[](vec2(0,0), vec2(0,1), vec2(1,1), vec2(1,0));
+const vec3 fullScreenQuad[6] = vec3[](vec3(-1, -1, 0), vec3(1, -1, 0), vec3(-1, 1, 0), vec3(-1, 1, 0), vec3(1, -1, 0), vec3(1, 1, 0));
+const uint u255 = uint(255);
+
+const vec3 quad[6] = vec3[](vec3(0, 0, 0), vec3(1, 0, 0), vec3(0, 1, 0), vec3(1, 0, 0), vec3(1, 1, 0), vec3(0, 1, 0));
+
+struct Light{
+  vec3 pos;
+  vec4 color;
+};
+
+uniform Light u_light[1];
+
+uniform mat4 u_worldViewProjection;
+
+uniform vec4 u_lightColor;
+uniform mat4 u_world;
+uniform mat4 u_viewInverse;
+uniform mat4 u_worldInverseTranspose;
+uniform float u_time;
+uniform float u_resolution;
+uniform float u_scale;
+
+out vec4 v_position;
+out vec3 v_normal;
+out vec4 v_color;
+out vec2 v_uv;
+out vec3 v_texcoord; 
+
+void main() {  
+  float id = float(gl_VertexID);
+  vec3 tp = quad[int(mod(id, 6.))];
+  
+  float qId = floor(id / 6.);
+  float axisId = mod(qId, 3.);
+  float planeId = floor(qId / 3.0);
+
+  tp.z = planeId / u_resolution;
+
+  vec3 position = u_scale * mix(tp.zxy, mix(tp.yzx, tp.xyz, step(1.5, axisId)), step(0.5, axisId));
+  vec3 normal = normals[int(axisId)*2];
+
+  v_texcoord = position;
+
+  vec4 a_position = vec4(position, 1);
+  
+  v_normal = normalize((u_world * vec4(normal, 0)).xyz);
+  //v_normal = normal;
+  gl_Position = u_worldViewProjection * a_position;
+}
+</script>
+<script id="light-f.glsl" type="glsl">#version 300 es
+precision highp float;
+
+const vec2 kernel[4] = vec2[](vec2(1,0), vec2(-1,0), vec2(0,1), vec2(0,-1));
+#define SIN45 0.707107
+
+struct Light{
+  vec3 pos;
+  vec4 color;
+};
+
+uniform Light u_light[1];
+uniform vec4 u_ambient;
+uniform vec4 u_specular;
+uniform float u_shininess;
+uniform vec2 u_bufferSize;
+uniform vec3 u_eye;
+uniform mat4 u_worldViewProjection;
+uniform mat4 u_inverseWorldViewProjection;
+
+uniform float u_bias;
+uniform vec2 u_attenuation;
+uniform vec2 u_depthRange;
+uniform float u_sampleRadius;
+
+uniform sampler2D u_color;
+uniform sampler2D u_normal;
+uniform sampler2D u_depth;
+
+in vec2 v_texCoord;
+
+out vec4 outColor;
+
+float rand(vec2 co){
+    return fract(sin(dot(co ,vec2(12.9898,78.233))) * 43758.5453);
+}
+
+vec3 normalAt(vec2 at){
+  return normalize(texture(u_normal, at).xyz*2. - 1.);
+}
+
+vec3 positionAt(vec2 at){
+  vec4 depth = texture(u_depth, at);
+  vec4 p1 = vec4(at*2. - 1., depth.r*2. -1., 1.);
+  vec4 p2 = u_inverseWorldViewProjection * p1;
+  vec4 position = p2 / p2.w;
+  return position.xyz;
+}
+
+float getOcclusionPoint(vec3 position, vec3 normal, vec2 occluderXY) {
+    vec3 occluderPosition = positionAt(occluderXY);
+    vec3 positionVec = occluderPosition - position;
+    float intensity = max(dot(normal, normalize(positionVec)) - u_bias, 0.0);
+
+    float attenuation = 1.0 / (u_attenuation.x + u_attenuation.y * length(positionVec));
+    return intensity * attenuation;
+}
+
+float depthAt(vec2 coord){
+  return texture(u_depth, coord).r;
+  //return texture(u_color, v_texCoord).a;
+}
+
+float getTotalOcclusion(vec3 position, vec3 normal){
+  float occlusion = 0.0;
+  
+  float depth = texture(u_depth, v_texCoord).r;
+
+  float kernelRadius = u_sampleRadius * (1.0 - depth);
+
+  for (int i = 0; i < 4; ++i) {
+      vec2 k1 = reflect(kernel[i], vec2(rand(position.xy), rand(position.xy*3.141)));
+      vec2 k2 = vec2(k1.x * SIN45 - k1.y * SIN45, k1.x * SIN45 + k1.y * SIN45);
+      k1 *= kernelRadius / u_bufferSize;
+      k2 *= kernelRadius / u_bufferSize;
+      occlusion += getOcclusionPoint(position, normal, v_texCoord + k1);
+      occlusion += getOcclusionPoint(position, normal, v_texCoord + k2 * 0.75);
+      occlusion += getOcclusionPoint(position, normal, v_texCoord + k1 * 0.5);
+      occlusion += getOcclusionPoint(position, normal, v_texCoord + k2 * 0.25);
+  }
+  occlusion = clamp(occlusion / 16.0, 0.0, 1.0);  
+  return occlusion;
+}
+
+void main() {
+
+  vec2 scale = 1. / u_bufferSize;
+
+  float depth = depthAt(v_texCoord);
+  vec4 diffuseColor = texture(u_color, v_texCoord);
+
+  diffuseColor.xyz += vec3(depth / 1000.);
+
+  vec3 normal = normalAt(v_texCoord);
+
+  if(length(normal) == 0.){
+    outColor = diffuseColor;
+  } else {
+    vec4 light = vec4(1.);
+
+    vec3 position = positionAt(v_texCoord);
+
+    //vec3 surfaceToLight = normalize(u_light[0].pos/* - position*/);
+    vec3 surfaceToLight = vec3(0., 0., 1.);
+    vec3 surfaceToView = normalize(u_eye - position);
+    vec3 halfVector = normalize(surfaceToLight + surfaceToView);
+    
+    float l = 0.5 * (dot(normal, surfaceToLight) + 1.);
+    float h = 0.5 * (dot(normal, halfVector) + 1.);
+
+    vec4 litColor = vec4(
+      (u_light[0].color * (
+        diffuseColor * max(l, 0.) + 
+        diffuseColor * u_ambient * u_ambient.a + 
+        u_specular * (l > 0. ? pow(max(0., h), u_shininess) : 0.) * u_specular.a)
+      ).rgb,
+      diffuseColor.a);
+    outColor = litColor;  
+  }
+
+  //bool front = dot(normal, surfaceToView) > 0.2;
+  /*bool edge = false;
+
+  edge = dot(normal, surfaceToView) < 0.001;
+
+  if(edge){
+    litColor = vec4(litColor.xyz * .0, 1.);
+  }*/
+
+  //litColor = vec4(normal, 1.);
+
+  //litColor.xyz = vec3(depth * 2.);
+
+}</script>
+<script id="noise-f.glsl" type="glsl">#version 300 es
+precision highp float;
+
+uniform float u_resolution;
+uniform float u_side;
+
+in vec2 v_texCoord;
+
+out float outColor;
+
+vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
+
+float snoise(vec3 v){ 
+  const vec2  C = vec2(1.0/6.0, 1.0/3.0) ;
+  const vec4  D = vec4(0.0, 0.5, 1.0, 2.0);
+
+// First corner
+  vec3 i  = floor(v + dot(v, C.yyy) );
+  vec3 x0 =   v - i + dot(i, C.xxx) ;
+
+// Other corners
+  vec3 g = step(x0.yzx, x0.xyz);
+  vec3 l = 1.0 - g;
+  vec3 i1 = min( g.xyz, l.zxy );
+  vec3 i2 = max( g.xyz, l.zxy );
+
+  //  x0 = x0 - 0. + 0.0 * C 
+  vec3 x1 = x0 - i1 + 1.0 * C.xxx;
+  vec3 x2 = x0 - i2 + 2.0 * C.xxx;
+  vec3 x3 = x0 - 1. + 3.0 * C.xxx;
+
+// Permutations
+  i = mod(i, 289.0 ); 
+  vec4 p = permute( permute( permute( 
+             i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+           + i.y + vec4(0.0, i1.y, i2.y, 1.0 )) 
+           + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+
+// Gradients
+// ( N*N points uniformly over a square, mapped onto an octahedron.)
+  float n_ = 1.0/7.0; // N=7
+  vec3  ns = n_ * D.wyz - D.xzx;
+
+  vec4 j = p - 49.0 * floor(p * ns.z *ns.z);  //  mod(p,N*N)
+
+  vec4 x_ = floor(j * ns.z);
+  vec4 y_ = floor(j - 7.0 * x_ );    // mod(j,N)
+
+  vec4 x = x_ *ns.x + ns.yyyy;
+  vec4 y = y_ *ns.x + ns.yyyy;
+  vec4 h = 1.0 - abs(x) - abs(y);
+
+  vec4 b0 = vec4( x.xy, y.xy );
+  vec4 b1 = vec4( x.zw, y.zw );
+
+  vec4 s0 = floor(b0)*2.0 + 1.0;
+  vec4 s1 = floor(b1)*2.0 + 1.0;
+  vec4 sh = -step(h, vec4(0.0));
+
+  vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+  vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+
+  vec3 p0 = vec3(a0.xy,h.x);
+  vec3 p1 = vec3(a0.zw,h.y);
+  vec3 p2 = vec3(a1.xy,h.z);
+  vec3 p3 = vec3(a1.zw,h.w);
+
+//Normalise gradients
+  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+  p0 *= norm.x;
+  p1 *= norm.y;
+  p2 *= norm.z;
+  p3 *= norm.w;
+
+// Mix final noise value
+  vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+  m = m * m;
+  return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), 
+                                dot(p2,x2), dot(p3,x3) ) );
+}
+
+vec3 vec2toVec3(vec2 v){
+  float col = floor(v.x * u_side);
+  float row = floor(v.y * u_side);
+  float n = col + row * u_side;
+  return vec3(
+      mod(n, u_resolution), 
+      mod(floor(n / u_resolution), u_resolution), 
+      floor(n / u_resolution / u_resolution));
+}
+
+void main() {
+  vec3 pos = vec2toVec3(v_texCoord);
+  
+  outColor = snoise(pos / u_resolution * 10.);
+  //outColor = pos.x / u_resolution;
+}</script>
+<script id="quad-v.glsl" type="glsl">#version 300 es
+precision highp float;
+
+in vec4 position;
+
+out vec4 v_position;
+out vec2 v_texCoord;
+
+void main() {
+  gl_Position = position;
+  v_texCoord = position.xy*0.5 + vec2(0.5);
+}</script>
+<script id="raymarch-f.glsl" type="glsl">#version 300 es
+
+precision highp float;
+precision mediump sampler3D;
+
+in vec2 v_texCoord; 
+
+uniform float u_resolution;
+uniform float u_scale;
+uniform float u_time;
+uniform mat4 u_worldViewProjection;
+uniform mat4 u_inverseWorldViewProjection;
+uniform mat4 u_raycastProjection;
+uniform vec3 u_eye;
+uniform float u_orbRadius;
+uniform int[1000] u_collected;
+
+uniform sampler3D u_noise;
+
+layout(location=0) out vec4 outColor;
+layout(location=1) out vec3 outNormal;
+
+//return distance(vec3(50., 0., 100.), pos) - 20.;
+
+const float maxRange = 3000.;
+const float orbChunkSize = 30.;
+const vec2 orbRange = vec2(100., 150.);
+
+float hash(vec2 p) { return fract(1e4 * sin(17.0 * p.x + p.y * 0.1) * (0.1 + abs(sin(p.y * 13.0 + p.x)))); }
+
+int posHash(vec2 p){
+  return int(floor(hash(p) * 1000.));
+}
+
+float rand(vec2 co){
+    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453);
+}
+
+float snoise(vec3 v){ 
+  return texture(u_noise, v).r;
+}
+
+vec3 nearestOrb(vec3 pos){
+  vec2 chunk = round(pos.xy / orbChunkSize);
+  //vec2(floor(chunk.x), floor(chunk.y))
+  float h = rand(chunk) * (orbRange.y - orbRange.x) + orbRange.x;
+  return vec3(chunk * orbChunkSize, h);
+}
+
+float sdf(vec3 pos){
+  float scale =  u_scale / u_resolution;
+  float simplex = snoise(pos / 500. + vec3(0.4, 0.5, pos.z / 500. + 0.5 - u_time * .005));
+  float f = sin(simplex * 5.) * 2. + pos.z * scale * 0.02;
+  f = max(f, pos.z - 200.);
+
+  if(pos.z < 250.){
+    vec3 orb = nearestOrb(pos);
+    float d = distance(orb, pos);
+    f = max(10. - d, f);
+
+    if(u_collected[posHash(orb.xy)] == 0){
+      f = min(d - u_orbRadius, f);
+    }
+
+  }
+
+  return f;
+}
+
+const float normalDelta1 = 1.;
+const float normalDelta2 = 0.1;
+
+vec3 normalSdfDelta(vec3 pos, float delta){
+  float a = sdf(pos);
+  float x = sdf(pos + vec3(delta,0.,0.)) - a;
+  float y = sdf(pos + vec3(0.,delta,0.)) - a;
+  float z = sdf(pos + vec3(0.,0.,delta)) - a;
+  return normalize(vec3(x,y,z));
+}
+
+/*vec3 normalSdf(vec3 pos){
+  return normalize(normalSdfDelta(pos, 1.) * 2. + normalSdfDelta(pos, .2));
+}*/
+
+vec3 normalSdf(vec3 pos){
+  return normalSdfDelta(pos, 1.);
+}
+
+float raycast(vec3 start, vec3 ray, int limit){
+  float l = 1.;
+  for(int i=0; i<limit; i++){
+    vec3 pos = start + ray*l;
+    /*if(pos.z > 100. && ray.z >=0.)
+      return 1000.;*/
+
+    float v = sdf(pos);
+    if(l>maxRange || v>1000.)
+      return 1000.;
+    if(v < 0.1){
+      return l;
+    } else {
+      //l += v * 1. * (1. + rand(ray.xy + vec2(l)));
+      l += v;
+    }
+  }
+  return l;
+  //return 100000.;
+}
+
+void main() {
+  if(gl_FragCoord.y<1. && gl_FragCoord.x<1.){
+    outColor = vec4(0.);
+    outNormal = vec3(0.);
+    vec3 orb = nearestOrb(u_eye);
+    
+    float orbDist = distance(u_eye, orb);
+    bool orbNearby = orbDist < 10. && (u_collected[posHash(orb.xy)] == 0);
+
+    if(orbNearby)
+      outColor.g = float(posHash(orb.xy));
+    else if(sdf(u_eye) < 0.)
+      outColor.r = 1.;
+    return;
+  }
+
+  vec4 screenPos = vec4(v_texCoord.x * 2. - 1., v_texCoord.y * 2. - 1., 0., 1.);
+  vec3 ray = normalize((u_raycastProjection * screenPos).xyz);
+  float l = raycast(u_eye, ray, 300);
+  vec3 pos = u_eye + ray * l;
+
+  vec3 color = vec3(normalize(pos.xy / 1000.), 0.1);
+  vec3 orb = nearestOrb(pos);
+
+  if(l>=10000.)  {
+    color = vec3(0., 0., .0);
+    outNormal = vec3(0., 0., 1.); 
+  } else if(distance(pos, orb) <= u_orbRadius + 0.1){
+    //color = vec3(0., 5., 5.);
+    color = vec3(0.);
+    //color = normalize(normalSdf(pos / 15. + vec3(0., 0., -1000.))) * 10.; 
+    outNormal = normalSdf(pos);;
+  } else {
+
+    //color = sin(pos / 70.) + sin(pos.yzx / 70.) + vec3(1., 0., -1.);
+
+    color = normalize(normalSdf(pos / 10. + vec3(0., 0., -10000.)) + vec3(1.));    
+
+    //color = normalize(pos) * 5.;
+    //color += vec3(0.2, 0.2, -.2);
+    //color *= (10. + pow(l, 0.5)) / 10.;
+
+    //color = vec3(1., 1., 1.);
+
+    /*float gridWidth = 0.001;
+    float gridStep = 1.;
+    float minGrid = 1. + min(sin(pos.x / gridStep), min(sin(pos.y / gridStep), sin(pos.z / gridStep)));
+    if(minGrid < gridWidth)
+      color *= minGrid / gridWidth;*/
+
+    /*float grid = sign(sin(pos.x / gridStep)) * sign(sin(pos.y / gridStep)) * sign(sin(pos.z / gridStep));
+    if(grid<0.)
+      color *= 0.9;*/
+
+    //float grid = sin(pos.x / gridStep) + sin(pos.y / gridStep) + sin(pos.z / gridStep);
+    
+    //color += vec3(sin(pos.x / gridStep), sin(pos.y / gridStep), sin(pos.z / gridStep)) * 0.2;
+
+    //color = vec3(pos.z / 100.);
+    //color = normalize(color);
+
+    //color = vec3(l / 1000., snoise(pos.yzx * 0.02), snoise(pos.zxy * 0.03));
+    
+    //color = vec3(1.) * l / 1000.;
+
+    vec3 normal = normalSdf(pos);
+
+    normal = normalize(normal + 0.3 * normalSdf(pos * 10. + vec3(0., 0., -10000.) + 0.2 * normalSdf(pos.zxy * 10.23456 + vec3(45.4, 68.7, -10000.))));
+    //normal = normalize(normal + 0.2 * normalize(vec3(snoise(pos / 10.), snoise(pos.yzx / 10.), snoise(pos.zxy / 10.))));
+
+    float shadowCast = raycast(pos + normal * 2., vec3(0.3, 0.2, 1.), 50);
+    if(shadowCast < 300. && shadowCast > .1)
+      color *= 0.3;
+
+    /*float normalAngle = abs(dot(normal, ray));
+    if(normalAngle < 0.2)
+      color *= normalAngle * 10.;*/
+
+    outNormal = normal; 
+
+    //outNormal = vec4(0., 0., -1., 1.); 
+    //color = normalize(vec3(sin(pos.xy / 20.), 0.1)) * 2.; 
+    //color -= vec3(1., 1., 1.) * l / 5000.;
+  }
+
+  //outNormal = vec4(0., 0., 1., 1.);
+  outColor = vec4(color, l);
+
+  /*screenPos.z = l;
+  vec4 cameraPosition = u_raycastProjection * screenPos;*/
+
+  vec4 cameraPosition = u_worldViewProjection * vec4(pos, 1.);
+
+  //vec4 cameraPosition = u_worldViewProjection * vec4(pos, 1.);
+  
+  float depth = cameraPosition.z / cameraPosition.w;
+  gl_FragDepth = min(0.999999,depth);
+
+  //gl_FragDepth = cameraPosition.z;
+
+  //gl_FragDepth = 0.1;
+
+}</script>
+<script id="screen-f.glsl" type="glsl">#version 300 es
+precision highp float;
+
+const int r = 2;
+const float rscale = 1.;
+uniform sampler2D u_color;
+uniform vec2 u_bufferSize;
+
+in vec2 v_texCoord;
+
+out vec4 outColor;
+
+void main() {
+  vec4 srcColor = texture(u_color, v_texCoord);
+  vec3 color = pow(srcColor.xyz, vec3(1.0/2.2) );
+  if(length(color) > 2.){
+    color /= pow(length(color), 0.4);
+  }
+  outColor = vec4(color, 1.);
+  gl_FragDepth = 0.01;
+}
+
+</script>
+<script id="simple-geo-v.glsl" type="glsl">#version 300 es
+precision highp float;
+
+const vec3 norm[6] = vec3[](vec3(1,0,0), vec3(-1,0,0), vec3(0,1,0), vec3(0,-1,0), vec3(0,0,1), vec3(0,0,-1));
+const vec2 uv[6] = vec2[](vec2(0,0), vec2(0,1), vec2(1,1), vec2(0,0), vec2(1,1) ,vec2(1,0));
+const uint u255 = uint(255);
+
+uniform mat4 u_worldViewProjection;
+//uniform float u_time;
+
+in vec4 position;
+//in uint color;
+
+//out vec4 v_color;
+out vec2 v_texCoord;
+
+void main() {
+  v_texCoord = uv[int(mod(float(gl_VertexID),6.))];
+  vec4 v_position = u_worldViewProjection * position;
+  //v_color = vec4(float((color>>16)&u255)/255., float((color>>8)&u255)/255., float(color&u255)/255., 1.0);
+  gl_Position = v_position;
+}
+</script>
+<script id="star-f.glsl" type="glsl">#version 300 es
+precision highp float;
+
+in vec2 v_texCoord;
+//in vec4 v_color;
+
+layout(location=0) out vec4 outColor;
+layout(location=1) out vec3 outNormal;
+
+float rand(float n){return fract(sin(n) * 43758.5453123);}
+
+void main() {
+  /*if(rand(v_texCoord.x + sin(v_texCoord.x) * v_texCoord.y ) > 0.5){
+    discard;
+    return;
+  }*/
+  //outColor = v_color;
+  outColor = vec4(1., 1., 1., 1.);
+  outNormal = vec3(0., 0., 0.);
+  gl_FragDepth = 0.99;
+}</script>
+
+<script type="text/javascript" src="bundle.js"></script>
+
+</html>

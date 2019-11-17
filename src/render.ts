@@ -39,7 +39,11 @@ const up = [0, 0, 1];
 
 export let render: (time: number, pos: Vec3, dir: Vec3) => void;
 
-export async function prepareRender(crash:() => void, collect:(arg0: number) => void, collected:Uint8Array) {
+export async function prepareRender(
+  crash: () => void,
+  collect: (arg0: number) => void,
+  collected: Uint8Array
+) {
   canvas = document.getElementById("c") as HTMLCanvasElement;
   gl = canvas.getContext("webgl2");
 
@@ -68,7 +72,13 @@ export async function prepareRender(crash:() => void, collect:(arg0: number) => 
   ];
 
   const shaderFiles = await Promise.all(
-    shaderSources.map(f => loadFile(`./shaders/${f}.glsl`))
+    shaderSources.map(f => {
+      let inlined = document.getElementById(`${f}.glsl`);
+      if (inlined) return inlined.innerHTML;
+      return (
+        document.getElementById(`${f}.glsl`) || loadFile(`./shaders/${f}.glsl`)
+      );
+    })
   );
   const shaders = shaderFiles.reduce(
     (p, c, i) => ((p[shaderSources[i]] = c), p),
@@ -172,9 +182,7 @@ export async function prepareRender(crash:() => void, collect:(arg0: number) => 
 
   //const capturer = new CCapture( { format: 'webm' } );
 
-
   render = (time: number, eye: Vec3, direction: Vec3) => {
-    
     const fov = (40 * Math.PI) / 180;
     const aspect = canvas.clientWidth / canvas.clientHeight;
     const zNear = 0.5;
@@ -203,7 +211,7 @@ export async function prepareRender(crash:() => void, collect:(arg0: number) => 
       u_specular: [1, 1, 1, 5],
       u_shininess: 50,
       u_time: time,
-      u_orbRadius: 1 + Math.sin(time*3) * 0.2,
+      u_orbRadius: 1 + Math.sin(time * 3) * 0.2,
       u_eye: eye,
       u_resolution: voxResolution,
       u_scale: 100,
@@ -229,10 +237,8 @@ export async function prepareRender(crash:() => void, collect:(arg0: number) => 
     const data = new Float32Array(4);
     gl.readBuffer(gl.COLOR_ATTACHMENT0);
     gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, data);
-    if(data[0])
-      crash();
-    else if(data[1])
-      collect(data[1]);
+    if (data[0]) crash();
+    else if (data[1]) collect(data[1]);
 
     renderPass(gl, lightPass);
 
