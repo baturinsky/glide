@@ -18,7 +18,7 @@
     "typescript": "^3.5.1"
   },
   "scripts": {
-    "build": "rollup -c",
+    "build": "rollup -c & node package.js",
     "autobuild": "rollup -c -w",
     "dev": "run-p start:dev autobuild",
     "start": "sirv public --port 5000",

@@ -182,6 +182,8 @@ export async function prepareRender(
 
   //const capturer = new CCapture( { format: 'webm' } );
 
+  let collectedBits = new Int32Array(100);
+
   render = (time: number, eye: Vec3, direction: Vec3) => {
     const fov = (40 * Math.PI) / 180;
     const aspect = canvas.clientWidth / canvas.clientHeight;
@@ -204,6 +206,17 @@ export async function prepareRender(
 
     const world = m4.identity();
 
+    for(let i=0; i<collectedBits.length; i++)
+      collectedBits[i] = 0;
+    
+    for(let i=0; i<collected.length; i++){
+      let j = Math.floor(i/16);
+      if(collected[i])
+        collectedBits[j] = collectedBits[j] + (1 << (i%16));
+      //console.log(i, j, collectedBits);
+    }
+
+
     const uniforms = {
       "u_light[0].pos": [1300, 1000, 2000],
       "u_light[0].color": [1, 1, 1, 1],
@@ -223,7 +236,7 @@ export async function prepareRender(
       u_worldViewProjection: viewProjectionTransform,
       u_inverseWorldViewProjection: inverceViewProjectionTransform,
       u_raycastProjection: raycastProjection,
-      u_collected: collected,
+      u_collected: collectedBits,
       u_noise: noise
     };
 
