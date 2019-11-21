@@ -24,6 +24,7 @@ type PassInfo = {
 
 const voxResolution = 200;
 const noiseResolution = 200;
+const toSun = v3.normalize([0, 0, 1]);
 
 export let canvas: HTMLCanvasElement;
 let gl: WebGL2RenderingContext;
@@ -140,19 +141,23 @@ export async function prepareRender(
   };
 
   gl.enable(gl.DEPTH_TEST);
+  //gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
 
   let starsGeometry = {
     color: { size: 1, data: [...new Array(6)].map((v, i) => 0) },
-    position: fullScreenQuad.position.map(n => n * 1000 + 500)
+    position: fullScreenQuad.position.map(n => n * 200 + 200)
   };
 
   console.log(starsGeometry);
 
   const starPass: PassInfo = {
     programs: [simpleGeoVs, starFs],
+    //programs: [quadVs, starFs],
     overwrite: true,
     source: twgl.createBufferInfoFromArrays(gl, starsGeometry),
+    uniforms: {},
+    //source: twgl.createBufferInfoFromArrays(gl, fullScreenQuad),
     target: terrainPass.target
   };
 
@@ -207,7 +212,7 @@ export async function prepareRender(
 
     const viewTransform = m4.inverse(camera);
     const viewProjectionTransform = m4.multiply(perspective, viewTransform);
-    const inverceViewProjectionTransform = m4.inverse(viewProjectionTransform);
+    const inverseViewProjectionTransform = m4.inverse(viewProjectionTransform);
 
     //console.log(v3.subtract(m4.transformPoint(invertViewProjectionTransform, [0,1,0]), eye));
 
@@ -233,6 +238,7 @@ export async function prepareRender(
       u_time: time,
       u_orbRadius: 1 + Math.sin(time * 3) * 0.2,
       u_eye: eye,
+      u_toSun: toSun,
       u_resolution: voxResolution,
       u_scale: 100,
       u_depthRange: [zNear, zFar],
@@ -243,7 +249,7 @@ export async function prepareRender(
       u_world: world,
       u_worldInverseTranspose: m4.transpose(m4.inverse(world)),
       u_worldViewProjection: viewProjectionTransform,
-      u_inverseWorldViewProjection: inverceViewProjectionTransform,
+      u_inverseWorldViewProjection: inverseViewProjectionTransform,
       u_raycastProjection: raycastProjection,
       u_collected: collectedBits,
       u_noise: noise
@@ -251,6 +257,7 @@ export async function prepareRender(
 
     Object.assign(lightPass.uniforms, uniforms);
 
+    starPass.uniforms = uniforms;
     terrainPass.uniforms = uniforms;
 
     renderPass(gl, terrainPass);
@@ -261,6 +268,10 @@ export async function prepareRender(
     gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, data);
     if (data[0]) crash();
     else if (data[1]) collect(data[1]);
+
+    /*gl.enable(gl.BLEND);
+    renderPass(gl, starPass);
+    gl.disable(gl.BLEND);*/
 
     renderPass(gl, lightPass);
 
@@ -317,7 +328,7 @@ function makeTheNoise(programs: [string, string]) {
 
   renderPass(gl, noisePass);
 
-  gl.flush();
+  //gl.flush();
   const data = new Float32Array(noise2DSide * noise2DSide);
   gl.readBuffer(gl.COLOR_ATTACHMENT0);
   gl.readPixels(0, 0, noise2DSide, noise2DSide, gl.RED, gl.FLOAT, data);

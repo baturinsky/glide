@@ -10,12 +10,13 @@ layout(location=1) out vec3 outNormal;
 float rand(float n){return fract(sin(n) * 43758.5453123);}
 
 void main() {
-  /*if(rand(v_texCoord.x + sin(v_texCoord.x) * v_texCoord.y ) > 0.5){
+  //if(length(v_texCoord+vec2(0.5)) > 1.5){
+  /*if(v_texCoord.y > .5){
     discard;
     return;
   }*/
   //outColor = v_color;
-  outColor = vec4(1., 1., 1., 1.);
-  outNormal = vec3(0., 0., 0.);
-  gl_FragDepth = 0.99;
+  outColor = vec4(0., 1., 0., 1.);
+  outNormal = vec3(0., 0., -1.);
+  //gl_FragDepth = 0.99;
 }

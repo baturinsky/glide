@@ -15,9 +15,6 @@ let index = fs.readFileSync("public/index.html").toString();
 
 let package = index.replace("</body>", "</body>" + all.join("\n"));
 
-//console.log(all.concat("\n"));
-//console.log(index);
-
 fs.writeFileSync("release/index.html", package)
 fs.copyFileSync("public/bundle.js", "release/bundle.js")
 fs.copyFileSync("public/favicon.png", "release/favicon.png")

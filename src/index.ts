@@ -3,7 +3,7 @@ import Keyboard from "./Keyboard";
 import { m4, v3 } from "./twgl/twgl-full";
 import { Vec3 } from "./twgl/v3";
 import zzfxInit from "./zzfx";
-import { V2 } from "./v2";
+import { V2, length } from "./v2";
 
 let volume = 1;
 
@@ -55,7 +55,8 @@ let time = 0;
 let collected = new Uint8Array(1000);
 let collectedAmount = 0;
 let history: Memory[] = [];
-const initialPos = [600, 300, 250];
+//const initialPos = [600, 300, 250];
+const initialPos = [0, 0, 250];
 const initialVel = 30;
 const acc = 300;
 const heightToSpeed = 0.3;
@@ -183,8 +184,8 @@ window.onload = async e => {
   });
 
   canvas.addEventListener("mousemove", (e: MouseEvent) => {
-    mouseDelta[0] = e.movementX;
-    mouseDelta[1] = e.movementY;
+    mouseDelta[0] += e.movementX;
+    mouseDelta[1] += e.movementY;
   });
 
   let lastTime = 0;
@@ -226,7 +227,9 @@ window.onload = async e => {
     time += dTime;
 
     mouseDelta = mouseDelta.map(d => Math.sign(d) * Math.min(30, Math.abs(d) * dTime * 60)) as V2;
-    
+
+    //vel -= length(mouseDelta) * 0.01;
+
     rot[0] = rot[0] - mouseDelta[0] * 0.1;
     rot[1] = Math.max(-90, Math.min(90, rot[1] - mouseDelta[1] * 0.1));
 
@@ -237,6 +240,8 @@ window.onload = async e => {
     smoothRot = smoothRot.map((prevSmooth, i) => prevSmooth * (1 - turn) + rot[i] * turn ) as V2;
 
     //smoothRot = rot.slice() as V2;
+
+    mouseDelta = [0,0];
 
     /*console.log("-");
     console.log(...mouseDelta);

@@ -15,6 +15,7 @@ uniform vec4 u_specular;
 uniform float u_shininess;
 uniform vec2 u_bufferSize;
 uniform vec3 u_eye;
+uniform vec3 u_toSun;
 uniform mat4 u_worldViewProjection;
 uniform mat4 u_inverseWorldViewProjection;
 
@@ -101,7 +102,7 @@ void main() {
     vec3 position = positionAt(v_texCoord);
 
     //vec3 surfaceToLight = normalize(u_light[0].pos/* - position*/);
-    vec3 surfaceToLight = vec3(0., 0., 1.);
+    vec3 surfaceToLight = u_toSun;
     vec3 surfaceToView = normalize(u_eye - position);
     vec3 halfVector = normalize(surfaceToLight + surfaceToView);
     

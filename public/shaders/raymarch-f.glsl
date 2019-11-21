@@ -14,6 +14,7 @@ uniform mat4 u_worldViewProjection;
 uniform mat4 u_inverseWorldViewProjection;
 uniform mat4 u_raycastProjection;
 uniform vec3 u_eye;
+uniform vec3 u_toSun;
 uniform float u_orbRadius;
 uniform int[100] u_collected;
 
@@ -94,7 +95,7 @@ vec3 nearestOrb(vec3 pos){
 
 float sdf(vec3 pos){
   float scale = u_scale / u_resolution;
-  float simplex = snoise(pos * vec3(1. / 500., 1./ 400., 1. / 250.) + vec3(0., 0., - u_time * .005));
+  float simplex = snoise(pos * vec3(1. / 500., 1./ 400., 1. / 250.) + vec3(0., 0., - u_time * .005 * 0.));
   float f = (sin(simplex * 5.) + pos.z * scale * 0.01) * 2.;
   //f += snoise2d(pos.xy / 1000.) * 0.1;
   f = max(f, pos.z - height(pos.xy));
@@ -152,7 +153,7 @@ float raycastDetailed(vec3 start, vec3 ray, int limit, out float nearestAngle){
     if(l>maxRange || v>1000.)
       return 1000.;
 
-    if(v < 0.1){
+    if(v < 0.01){
       return l;
     } else {
       //l += v * 1. * (1. + rand(ray.xy + vec2(l)));
@@ -240,7 +241,7 @@ void main() {
 
     
     float shadowAngle;
-    float shadowCast = raycastDetailed(pos + normal * 2., vec3(0., 0., 1.), 30, shadowAngle);
+    float shadowCast = raycastDetailed(pos + normal * 2., u_toSun, 30, shadowAngle);
     if(shadowCast < 50. && shadowCast > .1)
       color *= 0.5;
     /*else if (shadowAngle < 0.1)
@@ -262,7 +263,7 @@ void main() {
   }
 
   //outNormal = vec4(0., 0., 1., 1.);
-  outColor = vec4(color, l);
+  outColor = vec4(color, 1.);
 
   /*screenPos.z = l;
   vec4 cameraPosition = u_raycastProjection * screenPos;*/
