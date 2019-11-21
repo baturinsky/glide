@@ -8,6 +8,8 @@ in vec2 v_texCoord;
 uniform float u_resolution;
 uniform float u_scale;
 uniform float u_time;
+uniform float u_near;
+uniform float u_far;
 uniform mat4 u_worldViewProjection;
 uniform mat4 u_inverseWorldViewProjection;
 uniform mat4 u_raycastProjection;
@@ -24,6 +26,7 @@ layout(location=1) out vec3 outNormal;
 
 const float maxRange = 3000.;
 const float orbChunkSize = 30.;
+const float maxHeight = 200.;
 const vec2 orbRange = vec2(100., 150.);
 
 bool bit(int n, int b){
@@ -63,6 +66,11 @@ float snoise2d(vec2 v){
   return 130.0 * dot(m, g);
 }
 
+float height(vec2 at){
+  return 200.;// - snoise2d(at * 0.001) * 50.;
+}
+
+
 float hash(vec2 p) { return fract(1e4 * sin(17.0 * p.x + p.y * 0.1) * (0.1 + abs(sin(p.y * 13.0 + p.x)))); }
 
 int posHash(vec2 p){
@@ -85,12 +93,13 @@ vec3 nearestOrb(vec3 pos){
 }
 
 float sdf(vec3 pos){
-  float scale =  u_scale / u_resolution;
-  float simplex = snoise(pos * vec3(1. / 500., 1./ 500., 1. / 250.) + vec3(0., 0., - u_time * .005));
-  float f = sin(simplex * 5.) * 2. + pos.z * scale * 0.02;
-  f = max(f, pos.z - 200.);
+  float scale = u_scale / u_resolution;
+  float simplex = snoise(pos * vec3(1. / 500., 1./ 400., 1. / 250.) + vec3(0., 0., - u_time * .005));
+  float f = (sin(simplex * 5.) + pos.z * scale * 0.01) * 2.;
+  //f += snoise2d(pos.xy / 1000.) * 0.1;
+  f = max(f, pos.z - height(pos.xy));
 
-  if(pos.z < 250.){
+  if(pos.z < 200.){
     vec3 orb = nearestOrb(pos);
     float d = distance(orb, pos);
     f = max(10. - d, f);
@@ -109,9 +118,10 @@ const float normalDelta2 = 0.1;
 
 vec3 normalSdfDelta(vec3 pos, float delta){
   float a = sdf(pos);
-  float x = sdf(pos + vec3(delta,0.,0.)) - a;
-  float y = sdf(pos + vec3(0.,delta,0.)) - a;
-  float z = sdf(pos + vec3(0.,0.,delta)) - a;
+  vec2 d = vec2(delta,0.);
+  float x = sdf(pos + d.xyy) - a;
+  float y = sdf(pos + d.yxy) - a;
+  float z = sdf(pos + d.yyx) - a;
   return normalize(vec3(x,y,z));
 }
 
@@ -130,7 +140,7 @@ float raycastDetailed(vec3 start, vec3 ray, int limit, out float nearestAngle){
   for(int i=0; i<limit; i++){
     vec3 pos = start + ray*l;
     
-    if(pos.z > 200. && ray.z >=0.)
+    if(pos.z > maxHeight && ray.z >=0.)
       return 1000.;
 
     float v = sdf(pos);
@@ -141,6 +151,7 @@ float raycastDetailed(vec3 start, vec3 ray, int limit, out float nearestAngle){
 
     if(l>maxRange || v>1000.)
       return 1000.;
+
     if(v < 0.1){
       return l;
     } else {

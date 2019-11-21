@@ -1,4 +1,5 @@
 const fs = require("fs");
+const zipFolder = require('zip-a-folder');
 
 const shaderPath = "./public/shaders";
 let shaders = fs.readdirSync(shaderPath);
@@ -17,4 +18,8 @@ let package = index.replace("</body>", "</body>" + all.join("\n"));
 //console.log(all.concat("\n"));
 //console.log(index);
 
-fs.writeFileSync("public/index-offline.html", package)
+fs.writeFileSync("release/index.html", package)
+fs.copyFileSync("public/bundle.js", "release/bundle.js")
+fs.copyFileSync("public/favicon.png", "release/favicon.png")
+
+zipFolder.zipFolder('release', 'glide.zip', err=> {if(err) console.log(err)})

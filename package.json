@@ -18,7 +18,7 @@
     "typescript": "^3.5.1"
   },
   "scripts": {
-    "build": "rollup -c & node package.js",
+    "build": "rollup -c & node release.js",
     "autobuild": "rollup -c -w",
     "dev": "run-p start:dev autobuild",
     "start": "sirv public --port 5000",
@@ -33,6 +33,7 @@
     "rollup-plugin-sourcemaps": "^0.4.2",
     "spectorjs": "^0.9.8",
     "temp-dir": "^2.0.0",
-    "twgl.js": "^4.11.2"
+    "twgl.js": "^4.11.2",
+    "zip-a-folder": "^0.0.9"
   }
 }

@@ -8,7 +8,7 @@ import {
   v3
 } from "./twgl/twgl-full";
 
-import { loadText, loadFile } from "./util";
+import { loadFile } from "./util";
 import { Vec3 } from "./twgl/v3.js";
 import { Mat4 } from "./twgl/m4.js";
 
@@ -24,25 +24,22 @@ type PassInfo = {
 
 const voxResolution = 200;
 const noiseResolution = 200;
-const superSampling = 1;
 
 export let canvas: HTMLCanvasElement;
 let gl: WebGL2RenderingContext;
+let noise: WebGLTexture;
 
 const fullScreenQuad = {
   position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0]
 };
 
-//m4.transformPoint(m4.rotateZ(m4.identity(), time * 0.1), [
-
 const up = [0, 0, 1];
 
-export let render: (time: number, pos: Vec3, dir: Vec3) => void;
-
-export async function prepareRender(
+export async function prepareRender(  
   crash: () => void,
   collect: (arg0: number) => void,
-  collected: Uint8Array
+  collected: Uint8Array,
+  superSampling: number
 ) {
   canvas = document.getElementById("c") as HTMLCanvasElement;
   gl = canvas.getContext("webgl2");
@@ -117,7 +114,15 @@ export async function prepareRender(
     min: gl.NEAREST
   });
 
-  let noise = makeTheNoise([quadVs, noiseFs]);
+  const screenTexture = twgl.createTexture(gl, {
+    width: bufferWH[0],
+    height: bufferWH[1],
+    internalFormat: gl.RGBA16F,
+    min: superSampling>1?gl.LINEAR:gl.NEAREST
+  });  
+
+  if(!noise)
+    noise = makeTheNoise([quadVs, noiseFs]);
 
   const terrainPass: PassInfo = {
     programs: [quadVs, raymarchFs],
@@ -161,7 +166,7 @@ export async function prepareRender(
     source: twgl.createBufferInfoFromArrays(gl, fullScreenQuad),
     target: twgl.createFramebufferInfo(
       gl,
-      [{ internalFormat: gl.RGBA16F }],
+      [{ attachment: screenTexture }],
       bufferWH[0],
       bufferWH[1]
     )
@@ -183,6 +188,8 @@ export async function prepareRender(
   //const capturer = new CCapture( { format: 'webm' } );
 
   let collectedBits = new Int32Array(100);
+
+  let render: (time: number, pos: Vec3, dir: Vec3) => void;
 
   render = (time: number, eye: Vec3, direction: Vec3) => {
     const fov = (40 * Math.PI) / 180;
@@ -231,6 +238,8 @@ export async function prepareRender(
       u_depthRange: [zNear, zFar],
       u_bufferSize: bufferWH,
       u_viewInverse: camera,
+      u_near: zNear,
+      u_far: zFar,
       u_world: world,
       u_worldInverseTranspose: m4.transpose(m4.inverse(world)),
       u_worldViewProjection: viewProjectionTransform,
@@ -257,6 +266,7 @@ export async function prepareRender(
 
     renderPass(gl, viewportPass);
   };
+  return render;
 }
 
 function renderPass(gl: WebGL2RenderingContext, pass: PassInfo) {

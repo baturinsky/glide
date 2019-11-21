@@ -1,4 +1,4 @@
-import { render, canvas, prepareRender } from "./render";
+import { canvas, prepareRender } from "./render";
 import Keyboard from "./Keyboard";
 import { m4, v3 } from "./twgl/twgl-full";
 import { Vec3 } from "./twgl/v3";
@@ -25,7 +25,7 @@ let sfxDefs = {
   swipe: [10,.1,866,.1,.5,0,1.6,.4,.98],
   ow: [10,.1,1682,.2,.66,3,0,1.2,.69],
   wave: [10,.1,1825,1,.2,0,5,.2,.3],
-  bobbleUp: [5,.1,17,1,.26,.2,.1,8,.66],
+  bobbleUp: [1,.1,17,1,.26,.2,.1,8,.66],
 };
 
 let zzfx:Function;
@@ -138,7 +138,10 @@ function rewind(steps = -1) {
 }
 
 window.onload = async e => {
-  await prepareRender(crash, collect, collected);
+  let renderHQ = await prepareRender(crash, collect, collected, 1);
+  let renderLQ = await prepareRender(crash, collect, collected, 0.5);
+
+  let render = renderHQ;
 
   let statsDiv = document.getElementById("stats");
   let orbsDiv = document.getElementById("orbs");
@@ -158,6 +161,12 @@ window.onload = async e => {
       rewind(1e6);
       return;
     }
+
+    if (e.code == "KeyQ") {
+      render = render==renderHQ?renderLQ:renderHQ;
+      return;
+    }
+
   });
 
   canvas.addEventListener("mousedown", e => {
@@ -223,7 +232,7 @@ window.onload = async e => {
 
     //lastRot = [0,0];
 
-    let turn = Math.min(1, dTime * 60)
+    let turn = Math.min(1, dTime * 30)
 
     smoothRot = smoothRot.map((prevSmooth, i) => prevSmooth * (1 - turn) + rot[i] * turn ) as V2;
 
