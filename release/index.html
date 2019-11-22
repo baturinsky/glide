@@ -218,6 +218,8 @@ uniform float u_shininess;
 uniform vec2 u_bufferSize;
 uniform vec3 u_eye;
 uniform vec3 u_toSun;
+uniform float u_near;
+uniform float u_far;
 uniform mat4 u_worldViewProjection;
 uniform mat4 u_inverseWorldViewProjection;
 
@@ -290,6 +292,7 @@ void main() {
   vec2 scale = 1. / u_bufferSize;
 
   float depth = depthAt(v_texCoord);
+
   vec4 diffuseColor = texture(u_color, v_texCoord);
 
   diffuseColor.xyz += vec3(depth / 1000.);
@@ -318,6 +321,14 @@ void main() {
         u_specular * (l > 0. ? pow(max(0., h), u_shininess) : 0.) * u_specular.a)
       ).rgb,
       diffuseColor.a);
+
+    for(int i=0;i<4;i++){
+      if(depth - depthAt(v_texCoord + kernel[i] / u_bufferSize[i/2]) > 0.001){
+        litColor /= 2.;
+        break;
+      }
+    }
+
     outColor = litColor;  
   }
 
@@ -331,8 +342,6 @@ void main() {
   }*/
 
   //litColor = vec4(normal, 1.);
-
-  //litColor.xyz = vec3(depth * 2.);
 
 }</script>
 <script id="noise-f.glsl" type="glsl">#version 300 es
@@ -542,9 +551,10 @@ vec3 nearestOrb(vec3 pos){
 
 float sdf(vec3 pos){
   float scale = u_scale / u_resolution;
-  float simplex = snoise(pos * vec3(1. / 500., 1./ 400., 1. / 250.) + vec3(0., 0., - u_time * .005 * 0.));
+  float simplex = snoise(pos * vec3(1. / 500., 1./ 500., 1. / 250.) + vec3(0., 0., - u_time * .005));
   float f = (sin(simplex * 5.) + pos.z * scale * 0.01) * 2.;
-  //f += snoise2d(pos.xy / 1000.) * 0.1;
+  //f += snoise2d(pos.xy / 10.) * 0.1;
+  //f += sin(pos.x * 0.5) * 0.2 + sin(pos.y * 0.5) * 0.2;
   f = max(f, pos.z - height(pos.xy));
 
   if(pos.z < 200.){
@@ -600,11 +610,11 @@ float raycastDetailed(vec3 start, vec3 ray, int limit, out float nearestAngle){
     if(l>maxRange || v>1000.)
       return 1000.;
 
-    if(v < 0.01){
+    if(v < 0.1){
       return l;
     } else {
       //l += v * 1. * (1. + rand(ray.xy + vec2(l)));
-      l += v;
+      l += v * 1.1;
     }
   }
   return l;

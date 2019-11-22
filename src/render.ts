@@ -11,6 +11,7 @@ import {
 import { loadFile } from "./util";
 import { Vec3 } from "./twgl/v3.js";
 import { Mat4 } from "./twgl/m4.js";
+import { V2 } from "./v2.js";
 
 type PassInfo = {
   programs: [string, string];
@@ -36,7 +37,7 @@ const fullScreenQuad = {
 
 const up = [0, 0, 1];
 
-export async function prepareRender(  
+export async function prepareRender(
   crash: () => void,
   collect: (arg0: number) => void,
   collected: Uint8Array,
@@ -97,33 +98,26 @@ export async function prepareRender(
 
   //let va = await loadStage();
 
-  const bufferWH = [
+  const bufferWH: V2 = [
     canvas.clientWidth * superSampling,
     canvas.clientHeight * superSampling
   ];
 
-  const depthTexture = twgl.createTexture(gl, {
-    width: bufferWH[0],
-    height: bufferWH[1],
+  const depthTexture = createTexture(gl, bufferWH, {
     internalFormat: gl.DEPTH24_STENCIL8
   });
 
-  const normalTexture = twgl.createTexture(gl, {
-    width: bufferWH[0],
-    height: bufferWH[1],
+  const normalTexture = createTexture(gl, bufferWH, {
     internalFormat: gl.RGB,
     min: gl.NEAREST
   });
 
-  const screenTexture = twgl.createTexture(gl, {
-    width: bufferWH[0],
-    height: bufferWH[1],
+  const screenTexture = createTexture(gl, bufferWH, {
     internalFormat: gl.RGBA16F,
-    min: superSampling>1?gl.LINEAR:gl.NEAREST
-  });  
+    min: superSampling > 1 ? gl.LINEAR : gl.NEAREST
+  });
 
-  if(!noise)
-    noise = makeTheNoise([quadVs, noiseFs]);
+  if (!noise) noise = makeTheNoise([quadVs, noiseFs]);
 
   const terrainPass: PassInfo = {
     programs: [quadVs, raymarchFs],
@@ -140,24 +134,19 @@ export async function prepareRender(
     )
   };
 
-  gl.enable(gl.DEPTH_TEST);
-  //gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+  gl.enable(gl.DEPTH_TEST);
+  gl.enable(gl.BLEND);
 
-  let starsGeometry = {
+  let polyGeometry = {
     color: { size: 1, data: [...new Array(6)].map((v, i) => 0) },
     position: fullScreenQuad.position.map(n => n * 200 + 200)
   };
 
-  console.log(starsGeometry);
-
-  const starPass: PassInfo = {
+  const polyPass: PassInfo = {
     programs: [simpleGeoVs, starFs],
-    //programs: [quadVs, starFs],
     overwrite: true,
-    source: twgl.createBufferInfoFromArrays(gl, starsGeometry),
-    uniforms: {},
-    //source: twgl.createBufferInfoFromArrays(gl, fullScreenQuad),
+    source: twgl.createBufferInfoFromArrays(gl, polyGeometry),
     target: terrainPass.target
   };
 
@@ -218,16 +207,13 @@ export async function prepareRender(
 
     const world = m4.identity();
 
-    for(let i=0; i<collectedBits.length; i++)
-      collectedBits[i] = 0;
-    
-    for(let i=0; i<collected.length; i++){
-      let j = Math.floor(i/16);
-      if(collected[i])
-        collectedBits[j] = collectedBits[j] + (1 << (i%16));
+    for (let i = 0; i < collectedBits.length; i++) collectedBits[i] = 0;
+
+    for (let i = 0; i < collected.length; i++) {
+      let j = Math.floor(i / 16);
+      if (collected[i]) collectedBits[j] = collectedBits[j] + (1 << i % 16);
       //console.log(i, j, collectedBits);
     }
-
 
     const uniforms = {
       "u_light[0].pos": [1300, 1000, 2000],
@@ -257,7 +243,7 @@ export async function prepareRender(
 
     Object.assign(lightPass.uniforms, uniforms);
 
-    starPass.uniforms = uniforms;
+    polyPass.uniforms = uniforms;
     terrainPass.uniforms = uniforms;
 
     renderPass(gl, terrainPass);
@@ -269,9 +255,7 @@ export async function prepareRender(
     if (data[0]) crash();
     else if (data[1]) collect(data[1]);
 
-    /*gl.enable(gl.BLEND);
-    renderPass(gl, starPass);
-    gl.disable(gl.BLEND);*/
+    //renderPass(gl, polyPass);
 
     renderPass(gl, lightPass);
 
@@ -306,6 +290,19 @@ function logBuffer(
   const data = new Float32Array(100 * 100 * 1);
   gl.readBuffer(attachment);
   gl.readPixels(0, 0, 100, 100, gl.RED, gl.FLOAT, data);
+}
+
+function createTexture(gl: WebGL2RenderingContext, size: V2, other: Object) {
+  return twgl.createTexture(
+    gl,
+    Object.assign(
+      {
+        width: size[0],
+        height: size[1]
+      },
+      other
+    )
+  );
 }
 
 function makeTheNoise(programs: [string, string]) {

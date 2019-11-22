@@ -95,9 +95,10 @@ vec3 nearestOrb(vec3 pos){
 
 float sdf(vec3 pos){
   float scale = u_scale / u_resolution;
-  float simplex = snoise(pos * vec3(1. / 500., 1./ 400., 1. / 250.) + vec3(0., 0., - u_time * .005 * 0.));
+  float simplex = snoise(pos * vec3(1. / 500., 1./ 500., 1. / 250.) + vec3(0., 0., - u_time * .005));
   float f = (sin(simplex * 5.) + pos.z * scale * 0.01) * 2.;
-  //f += snoise2d(pos.xy / 1000.) * 0.1;
+  //f += snoise2d(pos.xy / 10.) * 0.1;
+  //f += sin(pos.x * 0.5) * 0.2 + sin(pos.y * 0.5) * 0.2;
   f = max(f, pos.z - height(pos.xy));
 
   if(pos.z < 200.){
@@ -153,11 +154,11 @@ float raycastDetailed(vec3 start, vec3 ray, int limit, out float nearestAngle){
     if(l>maxRange || v>1000.)
       return 1000.;
 
-    if(v < 0.01){
+    if(v < 0.1){
       return l;
     } else {
       //l += v * 1. * (1. + rand(ray.xy + vec2(l)));
-      l += v;
+      l += v * 1.1;
     }
   }
   return l;

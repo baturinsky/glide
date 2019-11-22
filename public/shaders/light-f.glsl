@@ -16,6 +16,8 @@ uniform float u_shininess;
 uniform vec2 u_bufferSize;
 uniform vec3 u_eye;
 uniform vec3 u_toSun;
+uniform float u_near;
+uniform float u_far;
 uniform mat4 u_worldViewProjection;
 uniform mat4 u_inverseWorldViewProjection;
 
@@ -88,6 +90,7 @@ void main() {
   vec2 scale = 1. / u_bufferSize;
 
   float depth = depthAt(v_texCoord);
+
   vec4 diffuseColor = texture(u_color, v_texCoord);
 
   diffuseColor.xyz += vec3(depth / 1000.);
@@ -116,6 +119,14 @@ void main() {
         u_specular * (l > 0. ? pow(max(0., h), u_shininess) : 0.) * u_specular.a)
       ).rgb,
       diffuseColor.a);
+
+    for(int i=0;i<4;i++){
+      if(depth - depthAt(v_texCoord + kernel[i] / u_bufferSize[i/2]) > 0.001){
+        litColor /= 2.;
+        break;
+      }
+    }
+
     outColor = litColor;  
   }
 
@@ -129,7 +140,5 @@ void main() {
   }*/
 
   //litColor = vec4(normal, 1.);
-
-  //litColor.xyz = vec3(depth * 2.);
 
 }
