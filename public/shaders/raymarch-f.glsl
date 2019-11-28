@@ -95,7 +95,7 @@ vec3 nearestOrb(vec3 pos){
 
 float sdf(vec3 pos){
   float scale = u_scale / u_resolution;
-  float simplex = snoise(pos * vec3(1. / 500., 1./ 500., 1. / 250.) + vec3(0., 0., - u_time * .005));
+  float simplex = snoise(pos * vec3(1. / 500., 1./ 500., 1. / 250.) + vec3(0., 0., - u_time * .005 * 0.));
   float f = (sin(simplex * 5.) + pos.z * scale * 0.01) * 2.;
   //f += snoise2d(pos.xy / 10.) * 0.1;
   //f += sin(pos.x * 0.5) * 0.2 + sin(pos.y * 0.5) * 0.2;

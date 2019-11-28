@@ -56,7 +56,7 @@ let collected = new Uint8Array(1000);
 let collectedAmount = 0;
 let history: Memory[] = [];
 //const initialPos = [600, 300, 250];
-const initialPos = [0, 0, 250];
+const initialPos = [0, 0, 0];
 const initialVel = 30;
 const acc = 300;
 const heightToSpeed = 0.3;
@@ -139,8 +139,8 @@ function rewind(steps = -1) {
 }
 
 window.onload = async e => {
-  let renderHQ = await prepareRender(crash, collect, collected, 1);
-  let renderLQ = await prepareRender(crash, collect, collected, 0.5);
+  let renderHQ = await prepareRender(crash, collect, collected, 2);
+  let renderLQ = await prepareRender(crash, collect, collected, 1);
 
   let render = renderHQ;
 
@@ -173,7 +173,7 @@ window.onload = async e => {
   canvas.addEventListener("mousedown", e => {
     if (!active()) canvas.requestPointerLock();
     else {
-      if (e.button == 0 && collectedAmount > 0) {
+      if (e.button == 0/* && collectedAmount > 0*/) {
         collectedAmount--;
         vel += accPerClick;
       }
@@ -201,6 +201,7 @@ window.onload = async e => {
   //rewind();
 
   let loops = 0;
+  let fps = 60.
 
   function loop(frameTime: number) {
     pauseDiv.style.visibility = !active() && !won() ? "visible" : "hidden";
@@ -222,6 +223,8 @@ window.onload = async e => {
 
     if (dTime > 0.1) dTime = 0.1;
 
+    fps = fps * 0.99 + 0.01 / dTime;
+
     lastTime = frameTime;
 
     time += dTime;
@@ -231,7 +234,7 @@ window.onload = async e => {
     //vel -= length(mouseDelta) * 0.01;
 
     rot[0] = rot[0] - mouseDelta[0] * 0.1;
-    rot[1] = Math.max(-90, Math.min(90, rot[1] - mouseDelta[1] * 0.1));
+    rot[1] = Math.max(-89.999, Math.min(89.999, rot[1] - mouseDelta[1] * 0.1));
 
     //lastRot = [0,0];
 
@@ -278,7 +281,7 @@ window.onload = async e => {
     pos = v3.add(pos, delta);
     statsDiv.innerText = `Time: ${Math.floor(time)} Position: ${pos
       .map(n => Math.round(n))
-      .join(",")} Velocity: ${Math.floor(vel)}`;
+      .join(",")} Velocity: ${Math.floor(vel)} FPS: ${Math.round(fps)}`;
     orbsDiv.innerText = `Orbs: ${collectedAmount}/${orbsToCollect}`;
     render(time, pos, dir);
     loops++;

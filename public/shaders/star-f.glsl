@@ -11,10 +11,10 @@ float rand(float n){return fract(sin(n) * 43758.5453123);}
 
 void main() {
   //if(length(v_texCoord+vec2(0.5)) > 1.5){
-  /*if(v_texCoord.y > .5){
+  if(sin(v_texCoord.y * 200.) + sin(v_texCoord.x * 200.) > .0){
     discard;
     return;
-  }*/
+  }
   //outColor = v_color;
   outColor = vec4(0., 1., 0., 1.);
   outNormal = vec3(0., 0., -1.);

@@ -25,14 +25,17 @@ type PassInfo = {
 
 const voxResolution = 200;
 const noiseResolution = 200;
-const toSun = v3.normalize([0, 0, 1]);
+const toSun = v3.normalize([0.1, 0.2, 1]);
+const citySize = [50, 50, 30];
+const blockSize = 32;
+//const toSun = v3.normalize([0., 0., 1]);
 
 export let canvas: HTMLCanvasElement;
 let gl: WebGL2RenderingContext;
 let noise: WebGLTexture;
 
 const fullScreenQuad = {
-  position: [-1, -1, 0, 1, -1, 0, -1, 1, 0, -1, 1, 0, 1, -1, 0, 1, 1, 0]
+  position: [-1, -1, 0, 1, 1, 0, -1, 1, 0, -1, -1, 0, 1, -1, 0, 1, 1, 0]
 };
 
 const up = [0, 0, 1];
@@ -60,6 +63,9 @@ export async function prepareRender(
 
   const shaderSources = [
     "noise-f",
+    "city-v",
+    "city-f",
+    "sky-f",
     "simple-geo-v",
     "star-f",
     "raymarch-f",
@@ -86,6 +92,9 @@ export async function prepareRender(
 
   const [
     noiseFs,
+    cityVs,
+    cityFs,
+    skyFs,
     simpleGeoVs,
     starFs,
     raymarchFs,
@@ -108,8 +117,16 @@ export async function prepareRender(
   });
 
   const normalTexture = createTexture(gl, bufferWH, {
-    internalFormat: gl.RGB,
+    internalFormat: gl.RGBA,
     min: gl.NEAREST
+  });
+
+  const colorTexture = createTexture(gl, bufferWH, {
+    internalFormat: gl.RGBA16F
+  });
+
+  const positionTexture = createTexture(gl, bufferWH, {
+    internalFormat: gl.RGBA32F
   });
 
   const screenTexture = createTexture(gl, bufferWH, {
@@ -119,43 +136,50 @@ export async function prepareRender(
 
   if (!noise) noise = makeTheNoise([quadVs, noiseFs]);
 
-  const terrainPass: PassInfo = {
-    programs: [quadVs, raymarchFs],
-    source: twgl.createBufferInfoFromArrays(gl, fullScreenQuad),
-    target: twgl.createFramebufferInfo(
-      gl,
-      [
-        { internalFormat: gl.RGBA16F },
-        { attachment: normalTexture },
-        { format: gl.DEPTH_STENCIL, attachment: depthTexture }
-      ],
-      bufferWH[0],
-      bufferWH[1]
-    )
-  };
+  const geometryTarget = twgl.createFramebufferInfo(
+    gl,
+    [
+      //{ attachment: colorTexture },
+      { attachment: normalTexture },
+      //{ attachment: positionTexture },
+      { format: gl.DEPTH_STENCIL, attachment: depthTexture }
+    ],
+    bufferWH[0],
+    bufferWH[1]
+  );
 
-  gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0/*, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2*/]);
   gl.enable(gl.DEPTH_TEST);
-  gl.enable(gl.BLEND);
+  //gl.enable(gl.BLEND);
+
+  const rayPass: PassInfo = {
+    programs: [quadVs, skyFs],
+    source: twgl.createBufferInfoFromArrays(gl, fullScreenQuad),
+    target: geometryTarget
+  };
 
   let polyGeometry = {
     color: { size: 1, data: [...new Array(6)].map((v, i) => 0) },
-    position: fullScreenQuad.position.map(n => n * 200 + 200)
+    position: fullScreenQuad.position.map(n => n * 200)
   };
 
   const polyPass: PassInfo = {
-    programs: [simpleGeoVs, starFs],
-    overwrite: true,
-    source: twgl.createBufferInfoFromArrays(gl, polyGeometry),
-    target: terrainPass.target
+    programs: [cityVs, cityFs],
+    //overwrite: true,
+    source: twgl.createBufferInfoFromArrays(gl, {
+      numElements: citySize[0] * citySize[1] * citySize[2] * 6 * 6 * 3
+    }),
+    //source: twgl.createBufferInfoFromArrays(gl, {position:fullScreenQuad.position.map(n => n * 0.)}),
+    target: geometryTarget
   };
 
   const lightPass: PassInfo = {
     programs: [quadVs, lightFs],
     uniforms: {
-      u_color: terrainPass.target.attachments[0],
-      u_normal: terrainPass.target.attachments[1],
-      u_depth: terrainPass.target.attachments[2]
+      //u_color: colorTexture,
+      u_normal: normalTexture,
+      //u_position: positionTexture,
+      u_depth: depthTexture
     },
     source: twgl.createBufferInfoFromArrays(gl, fullScreenQuad),
     target: twgl.createFramebufferInfo(
@@ -185,11 +209,13 @@ export async function prepareRender(
 
   let render: (time: number, pos: Vec3, dir: Vec3) => void;
 
+  gl.enable(gl.CULL_FACE);
+
   render = (time: number, eye: Vec3, direction: Vec3) => {
     const fov = (40 * Math.PI) / 180;
     const aspect = canvas.clientWidth / canvas.clientHeight;
-    const zNear = 0.5;
-    const zFar = 800;
+    const zNear = 5;
+    const zFar = 2000;
     const perspective = m4.perspective(fov, aspect, zNear, zFar);
 
     const camera = m4.lookAt(eye, v3.add(eye, direction), up);
@@ -197,7 +223,7 @@ export async function prepareRender(
     const raycastCamera = m4.lookAt([0, 0, 0], direction, up);
     const raycastProjection = m4.inverse(
       m4.multiply(perspective, m4.inverse(raycastCamera))
-    );
+    );    
 
     const viewTransform = m4.inverse(camera);
     const viewProjectionTransform = m4.multiply(perspective, viewTransform);
@@ -215,15 +241,24 @@ export async function prepareRender(
       //console.log(i, j, collectedBits);
     }
 
+    let zA = (zFar+zNear)/(zFar-zNear);
+    let zB = 2.0*zFar*zNear/(zFar-zNear);
+
+    let center = v3.add(eye, v3.mulScalar(direction, 12 * blockSize))
+    let origin = center.map((x,i) => Math.floor(x/blockSize - citySize[i]/2))
+
+    //console.log(origin);
+
     const uniforms = {
       "u_light[0].pos": [1300, 1000, 2000],
-      "u_light[0].color": [1, 1, 1, 1],
-      u_ambient: [1, 1, 1, 0.3],
-      u_specular: [1, 1, 1, 5],
-      u_shininess: 50,
+      "u_light[0].color": [1, 1, 1, 5],
+      u_ambient: [1, 1, 1, 0.1],
+      u_specular: [1, 1, 1, 1],
+      u_shininess: 10,
       u_time: time,
       u_orbRadius: 1 + Math.sin(time * 3) * 0.2,
       u_eye: eye,
+      u_origin: origin,
       u_toSun: toSun,
       u_resolution: voxResolution,
       u_scale: 100,
@@ -232,7 +267,11 @@ export async function prepareRender(
       u_viewInverse: camera,
       u_near: zNear,
       u_far: zFar,
+      u_a: zA,
+      u_b: zB,
       u_world: world,
+      u_citySize: citySize,
+      u_blockSize: blockSize,
       u_worldInverseTranspose: m4.transpose(m4.inverse(world)),
       u_worldViewProjection: viewProjectionTransform,
       u_inverseWorldViewProjection: inverseViewProjectionTransform,
@@ -244,18 +283,18 @@ export async function prepareRender(
     Object.assign(lightPass.uniforms, uniforms);
 
     polyPass.uniforms = uniforms;
-    terrainPass.uniforms = uniforms;
+    rayPass.uniforms = uniforms;
 
-    renderPass(gl, terrainPass);
+    //renderPass(gl, rayPass);
 
-    gl.flush();
+    /*gl.flush();
     const data = new Float32Array(4);
     gl.readBuffer(gl.COLOR_ATTACHMENT0);
     gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, data);
     if (data[0]) crash();
-    else if (data[1]) collect(data[1]);
+    else if (data[1]) collect(data[1]);*/
 
-    //renderPass(gl, polyPass);
+    renderPass(gl, polyPass);
 
     renderPass(gl, lightPass);
 
@@ -325,7 +364,8 @@ function makeTheNoise(programs: [string, string]) {
 
   renderPass(gl, noisePass);
 
-  //gl.flush();
+  gl.flush();
+
   const data = new Float32Array(noise2DSide * noise2DSide);
   gl.readBuffer(gl.COLOR_ATTACHMENT0);
   gl.readPixels(0, 0, noise2DSide, noise2DSide, gl.RED, gl.FLOAT, data);
@@ -343,3 +383,4 @@ function makeTheNoise(programs: [string, string]) {
 
   return noise3DTexture;
 }
+
