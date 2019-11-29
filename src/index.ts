@@ -86,8 +86,8 @@ function eject() {
 function crash() {
   console.log("crash");
   sfx("bobbleUp");
-  //rewind();
-  eject();
+  rewind(1);
+  //eject();
 }
 
 function remember(orb = -1) {
@@ -95,7 +95,7 @@ function remember(orb = -1) {
 }
 
 function collect(orb: number) {
-  console.log(orb);
+  //console.log(orb);
   if (collected[orb]) return;
   sfx("ponk");
   collectedAmount++;
@@ -118,12 +118,11 @@ function hash(p: [number, number]) {
 
 const penaltySteps = 3;
 
-function rewind(steps = -1) {
-  if (steps < 0) steps = penaltySteps;
-  let memoriesRemained = Math.max(1, history.length - penaltySteps);
+function rewind(steps) {
+  let memoriesRemained = Math.max(1, history.length - steps);
   history = history.slice(0, memoriesRemained);
   let lastMemory = history[history.length - 1];
-  collected = new Uint8Array(1000);
+  collected.fill(0, 0);
   collectedAmount = 0;
 
   for (let m of history) {
@@ -162,6 +161,11 @@ window.onload = async e => {
 
     if (e.code == "KeyR") {
       rewind(1e6);
+      return;
+    }
+
+    if (e.code == "KeyP") {
+      rewind(1);
       return;
     }
 

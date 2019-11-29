@@ -36,7 +36,7 @@ uniform sampler2D u_normal;
 uniform sampler2D u_depth;
 //uniform sampler2D u_position;
 
-in vec2 v_texCoord;
+in vec2 v_uv;
 
 out vec4 outColor;
 
@@ -71,7 +71,7 @@ vec3 positionAt(vec2 at){
 }
 
 float depthAt(vec2 coord){
-  //return texture(u_color, v_texCoord).a;
+  //return texture(u_color, v_uv).a;
   //return texture(u_depth, coord).r;
   //return 1. - u_b / (texture(u_depth, coord).r - u_a) * 2.;
   float fd = texture(u_depth, coord).r * 2. - 1.;
@@ -90,7 +90,7 @@ float getOcclusionPoint(vec3 position, vec3 normal, vec2 occluderXY) {
 float getTotalOcclusion(vec3 position, vec3 normal){
   float occlusion = 0.0;
   
-  float depth = (depthAt(v_texCoord) - u_near) / (u_far - u_near);
+  float depth = (depthAt(v_uv) - u_near) / (u_far - u_near);
 
   float kernelRadius = c_sampleRadius * (1.0 - depth);
   vec2 rand = normalize(vec2(rand(position.xy), rand(position.xy*3.141)));
@@ -100,10 +100,10 @@ float getTotalOcclusion(vec3 position, vec3 normal){
       vec2 k2 = vec2(k1.x * SIN45 - k1.y * SIN45, k1.x * SIN45 + k1.y * SIN45);
       k1 *= kernelRadius;
       k2 *= kernelRadius;
-      occlusion += getOcclusionPoint(position, normal, v_texCoord + k1);
-      occlusion += getOcclusionPoint(position, normal, v_texCoord + k2 * 0.75);
-      occlusion += getOcclusionPoint(position, normal, v_texCoord + k1 * .5);
-      occlusion += getOcclusionPoint(position, normal, v_texCoord + k2 * 0.25);
+      occlusion += getOcclusionPoint(position, normal, v_uv + k1);
+      occlusion += getOcclusionPoint(position, normal, v_uv + k2 * 0.75);
+      occlusion += getOcclusionPoint(position, normal, v_uv + k1 * .5);
+      occlusion += getOcclusionPoint(position, normal, v_uv + k2 * 0.25);
   }
   occlusion = clamp(occlusion / 8.0, 0.0, 1.0);  
   return occlusion;
@@ -157,13 +157,13 @@ void main() {
     return;
   }
 
-  float depth = depthAt(v_texCoord);
+  float depth = depthAt(v_uv);
 
-  vec4 normal = texture(u_normal, v_texCoord);
+  vec4 normal = texture(u_normal, v_uv);
   vec4 litColor = vec4(normal.rgb + normal.a, 1.);
 
   for(int i=0;i<4;i+=2){
-    vec2 at = v_texCoord + kernel[i] / u_bufferSize[i/2] * max(2., (600. / (300. + depth)));
+    vec2 at = v_uv + kernel[i] / u_bufferSize[i/2] * max(2., (600. / (300. + depth)));
     float d = abs(depth - depthAt(at));
     if(d > 10.){
       litColor.xyz = vec3(10.); 
@@ -171,14 +171,19 @@ void main() {
     }
   }
 
+  if(normal.r > 0.){
+    litColor.rgb *= length(sin(v_uv.x * 1000.) + sin(v_uv.y * 1000.)) * 0.5;
+  }
+
+
   litColor.xyz *= 1. - depth / 1500.;
   outColor = litColor;
 
 }
 
 
-  //float depth = (depthAt(v_texCoord) - 0.996) * 100.;
-  //litColor.rgb *= depthAt(v_texCoord) / 5000.;
+  //float depth = (depthAt(v_uv) - 0.996) * 100.;
+  //litColor.rgb *= depthAt(v_uv) / 5000.;
 
   /*float occlusion = getTotalOcclusion(position, normal);
   litColor -= occlusion * 10.;*/

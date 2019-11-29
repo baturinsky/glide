@@ -4835,8 +4835,7 @@
                 const inverseViewProjectionTransform = inverse(viewProjectionTransform);
                 //console.log(v3.subtract(m4.transformPoint(invertViewProjectionTransform, [0,1,0]), eye));
                 const world = identity();
-                for (let i = 0; i < collectedBits.length; i++)
-                    collectedBits[i] = 0;
+                collectedBits.fill(0, 0);
                 for (let i = 0; i < collected.length; i++) {
                     let j = Math.floor(i / 16);
                     if (collected[i])
@@ -5118,24 +5117,17 @@
     function won() {
         return collectedAmount >= orbsToCollect;
     }
-    function eject() {
-        collectedAmount = Math.max(0, collectedAmount - 5);
-        if (collectedAmount == 0)
-            time = 0;
-        pos[2] = 300;
-        vel = initialVel;
-    }
     function crash() {
         console.log("crash");
         sfx("bobbleUp");
-        //rewind();
-        eject();
+        rewind(1);
+        //eject();
     }
     function remember(orb = -1) {
         history.push({ pos, time, orb, vel, rot });
     }
     function collect(orb) {
-        console.log(orb);
+        //console.log(orb);
         if (collected[orb])
             return;
         sfx("ponk");
@@ -5145,14 +5137,11 @@
             collected[orb] = 1;
         history.push({ pos, time, orb, vel, rot });
     }
-    const penaltySteps = 3;
-    function rewind(steps = -1) {
-        if (steps < 0)
-            steps = penaltySteps;
-        let memoriesRemained = Math.max(1, history.length - penaltySteps);
+    function rewind(steps) {
+        let memoriesRemained = Math.max(1, history.length - steps);
         history = history.slice(0, memoriesRemained);
         let lastMemory = history[history.length - 1];
-        collected = new Uint8Array(1000);
+        collected.fill(0, 0);
         collectedAmount = 0;
         for (let m of history) {
             if (m.orb >= 0) {
@@ -5186,6 +5175,10 @@
             }
             if (e.code == "KeyR") {
                 rewind(1e6);
+                return;
+            }
+            if (e.code == "KeyP") {
+                rewind(1);
                 return;
             }
             if (e.code == "KeyQ") {

@@ -4,7 +4,7 @@ precision highp float;
 uniform float u_resolution;
 uniform float u_side;
 
-in vec2 v_texCoord;
+in vec2 v_uv;
 
 out float outColor;
 
@@ -91,7 +91,7 @@ vec3 vec2toVec3(vec2 v){
 }
 
 void main() {
-  vec3 pos = vec2toVec3(v_texCoord);
+  vec3 pos = vec2toVec3(v_uv);
   
   outColor = snoise(pos / u_resolution * 10.);
   //outColor = pos.x / u_resolution;

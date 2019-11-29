@@ -239,7 +239,7 @@ export async function prepareRender(
 
     const world = m4.identity();
 
-    for (let i = 0; i < collectedBits.length; i++) collectedBits[i] = 0;
+    collectedBits.fill(0, 0);
 
     for (let i = 0; i < collected.length; i++) {
       let j = Math.floor(i / 16);
