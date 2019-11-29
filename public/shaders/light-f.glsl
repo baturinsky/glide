@@ -44,6 +44,14 @@ float rand(vec2 co){
     return fract(sin(dot(co ,vec2(12.9898,78.233))) * 43758.5453);
 }
 
+float rand2(vec2 v) { 
+	return fract(sin(dot(v, vec2(12.9898, 4.1414))) * 43758.5453);
+}
+
+float rand3(vec3 v){
+  return rand2(v.xy + v.yz * 21.);
+}
+
 vec3 normalAt(vec2 at){
   return normalize(texture(u_normal, at).xyz*2. - 1.);
 }
@@ -55,8 +63,8 @@ float shinyAt(vec2 at){
 vec3 positionAt(vec2 at){
   //return texture(u_position, at).xyz;
 
-  vec4 depth = texture(u_depth, at);
-  vec4 p1 = vec4(at*2. - 1., depth.r*2. -1., 1.);
+  float depth = texture(u_depth, at).r;
+  vec4 p1 = vec4(at*2. - 1., depth*2. - 1., 1.);
   vec4 p2 = u_inverseWorldViewProjection * p1;
   vec4 position = p2 / p2.w;
   return position.xyz;
@@ -122,45 +130,52 @@ vec3 fogColor(vec3 ray){
   return vec3(mod(aVer, .5) < 0.03 || mod(aHor, .5) < 0.03?.5:0.);*/
 }
 
+
+float slotCubeId(vec3 slot){
+  return rand3(slot * 3.142);
+}
+
+int hashAt(vec3 at){
+  vec3 slot = round(at / u_blockSize);
+  float cube = slotCubeId(slot);
+  return int(floor(cube * 1000.));
+}
+
 void main() {
 
-  vec4 screenPos = vec4(v_texCoord.x * 2. - 1., v_texCoord.y * 2. - 1., 0., 1.);
-  vec3 ray = normalize((u_raycastProjection * screenPos).xyz);  
+  if(gl_FragCoord.y<1. && gl_FragCoord.x<1.){
+    outColor = vec4(0.);
+    vec4 center = texture(u_normal, vec2(0.5));
+    
+    bool crashed = center.b!=0.;
+    bool starNearby = center.r!=0. && depthAt(vec2(0.5)) < 50.;
 
-  vec2 scale = 1. / u_bufferSize;
+    if(starNearby)
+      outColor.g = float(hashAt(positionAt(vec2(0.5))));
+    else if(crashed)
+      outColor.r = 1.;
+    return;
+  }
 
-  //vec4 diffuseColor = texture(u_color, v_texCoord);
-  
-  //diffuseColor.xyz += vec3(depth / 1000.);
-
-  vec3 normal = normalAt(v_texCoord);
   float depth = depthAt(v_texCoord);
 
-  //diffuseColor = vec4(normal * 2. + 1., 1.);
-  //normal = vec3(0.);
-
-  //vec4 light = vec4(1.);
-
-  vec3 position = positionAt(v_texCoord);
-
-  float shiny = shinyAt(v_texCoord);
-  vec4 litColor = vec4(vec3(shiny), 1.);
+  vec4 normal = texture(u_normal, v_texCoord);
+  vec4 litColor = vec4(normal.rgb + normal.a, 1.);
 
   for(int i=0;i<4;i+=2){
-    vec2 at = v_texCoord + kernel[i] / u_bufferSize[i/2] * max(2., (900. / (300. + depth)));
+    vec2 at = v_texCoord + kernel[i] / u_bufferSize[i/2] * max(2., (600. / (300. + depth)));
     float d = abs(depth - depthAt(at));
-    //float dn = length(normal - normalAt(at));
-    if(d > 20. /*|| dn > 0.1*/){
-      //litColor *= 10.;
-      //litColor.xyz *= .2;
-      //litColor.xyz = vec3(10. - depth / 50.);
+    if(d > 10.){
       litColor.xyz = vec3(10.); 
       break;
     }
   }
 
-
   litColor.xyz *= 1. - depth / 1500.;
+  outColor = litColor;
+
+}
+
 
   //float depth = (depthAt(v_texCoord) - 0.996) * 100.;
   //litColor.rgb *= depthAt(v_texCoord) / 5000.;
@@ -170,7 +185,6 @@ void main() {
 
   //litColor.xyz = normal + 1.;
 
-  outColor = litColor;
 
   //outColor = vec4(vec3(position.z / 1000.), 1.);
 
@@ -197,7 +211,6 @@ void main() {
 
   //litColor = vec4(normal, 1.);
 
-}
 
   //vec3 surfaceToLight = normalize(u_light[0].pos/* - position*/);
 

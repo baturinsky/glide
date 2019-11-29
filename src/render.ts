@@ -40,6 +40,8 @@ const fullScreenQuad = {
 
 const up = [0, 0, 1];
 
+let textTexture: WebGLTexture;
+
 export async function prepareRender(
   crash: () => void,
   collect: (arg0: number) => void,
@@ -48,6 +50,8 @@ export async function prepareRender(
 ) {
   canvas = document.getElementById("c") as HTMLCanvasElement;
   gl = canvas.getContext("webgl2");
+
+  if (!textTexture) textTexture = createText();
 
   if (!gl) {
     document.children[0].innerHTML =
@@ -148,7 +152,9 @@ export async function prepareRender(
     bufferWH[1]
   );
 
-  gl.drawBuffers([gl.COLOR_ATTACHMENT0/*, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2*/]);
+  gl.drawBuffers([
+    gl.COLOR_ATTACHMENT0 /*, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2*/
+  ]);
   gl.enable(gl.DEPTH_TEST);
   //gl.enable(gl.BLEND);
 
@@ -209,7 +215,7 @@ export async function prepareRender(
 
   let render: (time: number, pos: Vec3, dir: Vec3) => void;
 
-  gl.enable(gl.CULL_FACE);
+  //gl.enable(gl.CULL_FACE);
 
   render = (time: number, eye: Vec3, direction: Vec3) => {
     const fov = (40 * Math.PI) / 180;
@@ -223,7 +229,7 @@ export async function prepareRender(
     const raycastCamera = m4.lookAt([0, 0, 0], direction, up);
     const raycastProjection = m4.inverse(
       m4.multiply(perspective, m4.inverse(raycastCamera))
-    );    
+    );
 
     const viewTransform = m4.inverse(camera);
     const viewProjectionTransform = m4.multiply(perspective, viewTransform);
@@ -241,11 +247,13 @@ export async function prepareRender(
       //console.log(i, j, collectedBits);
     }
 
-    let zA = (zFar+zNear)/(zFar-zNear);
-    let zB = 2.0*zFar*zNear/(zFar-zNear);
+    let zA = (zFar + zNear) / (zFar - zNear);
+    let zB = (2.0 * zFar * zNear) / (zFar - zNear);
 
-    let center = v3.add(eye, v3.mulScalar(direction, 12 * blockSize))
-    let origin = center.map((x,i) => Math.floor(x/blockSize - citySize[i]/2))
+    let center = v3.add(eye, v3.mulScalar(direction, 12 * blockSize));
+    let origin = center.map((x, i) =>
+      Math.floor(x / blockSize - citySize[i] / 2)
+    );
 
     //console.log(origin);
 
@@ -277,7 +285,8 @@ export async function prepareRender(
       u_inverseWorldViewProjection: inverseViewProjectionTransform,
       u_raycastProjection: raycastProjection,
       u_collected: collectedBits,
-      u_noise: noise
+      u_noise: noise,
+      u_text: textTexture
     };
 
     Object.assign(lightPass.uniforms, uniforms);
@@ -287,16 +296,15 @@ export async function prepareRender(
 
     //renderPass(gl, rayPass);
 
-    /*gl.flush();
+    renderPass(gl, polyPass);
+
+    renderPass(gl, lightPass);
+
     const data = new Float32Array(4);
     gl.readBuffer(gl.COLOR_ATTACHMENT0);
     gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, data);
     if (data[0]) crash();
-    else if (data[1]) collect(data[1]);*/
-
-    renderPass(gl, polyPass);
-
-    renderPass(gl, lightPass);
+    else if (data[1]) collect(data[1]);
 
     renderPass(gl, viewportPass);
   };
@@ -384,3 +392,27 @@ function makeTheNoise(programs: [string, string]) {
   return noise3DTexture;
 }
 
+function createText(): WebGLTexture {
+  const ctx = document.createElement("canvas").getContext("2d");
+  let texts = [
+    "無限の都市",
+    "Music by ...",
+    "Привет DTF.ru",
+    "Добро пожаловать в Омск",
+    "Design&code by @baturinsky",
+    "Thanks to Procjam Discord",
+    "Written in GLSL",
+    "A Boundless City"
+  ];
+  ctx.canvas.width = 1024;
+  ctx.canvas.height = 512;
+  ctx.fillStyle = "white";
+  ctx.textAlign = "center";
+  ctx.font = "bold 52px Verdana";
+  for (let i = 0; i < 8; i++) {
+    ctx.fillText(texts[i % 8], (ctx.canvas.width / 2) | 0, 64 * (0.5 + i));
+  }
+  let canvas = ctx.canvas;
+  let tex = twgl.createTexture(gl, { src: canvas, wrap: gl.REPEAT });
+  return tex;
+}

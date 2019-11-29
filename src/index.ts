@@ -46,6 +46,7 @@ type Memory = {
 
 let rad = Math.PI / 180;
 
+let frame = 0;
 let pos: Vec3;
 let vel: number;
 let rot: V2
@@ -56,7 +57,7 @@ let collected = new Uint8Array(1000);
 let collectedAmount = 0;
 let history: Memory[] = [];
 //const initialPos = [600, 300, 250];
-const initialPos = [0, 0, 0];
+const initialPos = [0, 50, 0];
 const initialVel = 30;
 const acc = 300;
 const heightToSpeed = 0.3;
@@ -94,6 +95,7 @@ function remember(orb = -1) {
 }
 
 function collect(orb: number) {
+  console.log(orb);
   if (collected[orb]) return;
   sfx("ponk");
   collectedAmount++;
@@ -205,6 +207,7 @@ window.onload = async e => {
 
   function loop(frameTime: number) {
     pauseDiv.style.visibility = !active() && !won() ? "visible" : "hidden";
+    frame ++;
 
     winDiv.style.visibility = won() ? "visible" : "hidden";
     if (won()) {
@@ -279,10 +282,12 @@ window.onload = async e => {
     let delta = v3.mulScalar(dir, vel * dTime);
     vel -= delta[2] * heightToSpeed;
     pos = v3.add(pos, delta);
-    statsDiv.innerText = `Time: ${Math.floor(time)} Position: ${pos
-      .map(n => Math.round(n))
-      .join(",")} Velocity: ${Math.floor(vel)} FPS: ${Math.round(fps)}`;
-    orbsDiv.innerText = `Orbs: ${collectedAmount}/${orbsToCollect}`;
+    if(frame%5 == 0){
+      statsDiv.innerText = `Time: ${Math.floor(time)} Position: ${pos
+        .map(n => Math.round(n))
+        .join(",")} Velocity: ${Math.floor(vel)} FPS: ${Math.round(fps)}`;
+      orbsDiv.innerText = `Orbs: ${collectedAmount}/${orbsToCollect}`;
+    }
     render(time, pos, dir);
     loops++;
     window.requestAnimationFrame(loop);

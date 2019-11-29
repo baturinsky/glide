@@ -17,14 +17,19 @@ const int CLOSER = 3;
 const int LEFT = 4;
 const int RIGHT = 5;
 
+const int BASE = 1;
+const int BILLBOARD = 2;
+const int STAR = 4;
+
 uniform mat4 u_worldViewProjection;
 uniform float u_time;
 uniform vec3 u_origin;
+uniform vec3 u_eye;
 uniform vec3 u_citySize;
 uniform float u_blockSize;
-//uniform sampler3D u_noise;
 uniform float u_a;
 uniform float u_b;
+uniform int[100] u_collected;
 
 out vec2 v_uv;
 out vec3 v_position;
@@ -51,6 +56,24 @@ float rand2(vec2 v) {
 
 float rand3(vec3 v){
   return rand2(v.xy + v.yz * 21.);
+}
+
+bool bit(int n, int b){
+  return floor(mod(float(n) / pow(2., float(b)), 2.)) == 1.;
+} 
+
+bool collected(int b){
+  return bit(u_collected[b/16], int(mod(float(b),16.)));
+}
+
+float slotCubeId(vec3 slot){
+  return rand3(slot * 3.142);
+}
+
+int hashAt(vec3 at){
+  vec3 slot = round(at / u_blockSize);
+  float cube = slotCubeId(slot);
+  return int(floor(cube * 1000.));
 }
 
 /*float snoise(vec3 v){ 
@@ -90,6 +113,10 @@ bool hasBlockIn(vec3 slot){
   return isPillar(slot) || rand3(slot) > 0.92;
 }
 
+bool hasStarIn(vec3 slot){
+  return mod(slot, 2.) == vec3(1., 0., 1.) && !isPillar(slot) && rand3(slot) < 0.2;
+}
+
 vec3 hasSpeed(vec3 slot){
   if(isElevator){
     return vec3(0., 0., (floor(rand(slot.z) * 4.) - 1.5) * 20.);
@@ -123,7 +150,7 @@ void makeBase(){
   corner.xy *= radius;
   corner.z *= corner.z<0.?1.:-0.25 - 0.2 * rand(v_cubeID*243.);
   if(radius < 1.){
-    v_flag = v_flag | 1;
+    v_flag = v_flag | BASE;
     v_windows = floor(v_windows / 2.);
     v_windowMargin = vec2(.3, 1.);
   } else {
@@ -156,13 +183,6 @@ void makeRoof2(){
   //normal.z -= .5;
 }
 
-void makeConnector(){
-  corner.xy *= 0.2 + 0.2 * rand(columnID + 19.);
-  if(rand(columnID + 21.) > 0.7)
-    corner = (rotationZ(radians(45.)) * vec4(corner, 1.)).xyz;
-  //v_windows.x = floor(v_windows.x*0.7);      
-  //v_windows *= 0.;
-}
 
 void makeSlope(){
   if(corner.z < 0.)
@@ -178,6 +198,15 @@ void makeSlope(){
       v_windows *= 0.;
   }
 }
+
+void makeConnector(){
+  corner.xy *= 0.2 + 0.2 * rand(columnID + 19.);
+  if(rand(columnID + 21.) > 0.7)
+    corner = (rotationZ(radians(45.)) * vec4(corner, 1.)).xyz;
+  //v_windows.x = floor(v_windows.x*0.7);      
+  //v_windows *= 0.;
+}
+
 
 void makeAttachment(){
   int attachmentKind = int(rand(v_cubeID * 341.) * 4.);
@@ -222,27 +251,31 @@ void main() {
 
   vec3 slot = vec3(cubeOrder % cw, cubeOrder / cw % cd, cubeOrder / cw / cd % ch) + u_origin;
 
-  isElevator = isPillar(slot + vec3(0., 1., 0.));
+  //isElevator = isPillar(slot + vec3(0., 1., 0.));
 
   speed = hasSpeed(slot);
+
+  bool moving = speed != vec3(0.);
+  bool isLane = speed.xy != vec2(0.);
+
+  /*if(isLane)
+    isElevator = false;*/
+
   vec3 shift;
-  
   if(isElevator){
     shift = mod(speed * u_time, u_blockSize * u_citySize);    
     //shift = speed * u_time;
   } else {
     //shift = mod(speed * u_time, u_blockSize * u_citySize);
     shift = speed * u_time;
-    slot = floor((slot * u_blockSize - shift) / u_blockSize);
+    slot = slot - floor(shift / u_blockSize);
   }
 
-
-  bool moving = speed != vec3(0.);
-  bool isLane = speed.xy != vec2(0.);
+  v_slot = slot;
 
   columnID = rand2(slot.xy);
 
-  v_cubeID = rand(slot[0] + slot[1] * 1e4 + slot[2] * 1e8);
+  v_cubeID = slotCubeId(slot);
 
   bool isBlock = hasBlockIn(slot);  
   
@@ -296,7 +329,16 @@ void main() {
   v_windowSize = vec2(rand(columnID + 15.), rand(columnID + 16.)) * 0.6 + 0.4;
   v_windowMargin = max(vec2(rand(columnID + 17.) * 0.25, rand(columnID + 18.) * 0.15) - 0.05, 0.);
 
-  if(isElevator){
+  if(hasStarIn(slot)){
+    float r = v_cubeID + float(gl_VertexID % 36) + 11.;
+    int hash = hashAt(slot * u_blockSize);
+    if(collected(hash)){
+      return;
+    }
+    corner = vec3(sin(rand(r)*10. + u_time), sin(rand(r + 2.)*10. + u_time), sin(rand(r + 3.)*10. + u_time))*0.2;
+    corner *= max(1., 100. / distance(slot * u_blockSize, u_eye));
+    v_flag = v_flag | STAR;
+  } else if(isElevator){
     v_uv.xy = corner.xz * 0.4 + 0.45;
     corner *= 0.1;
     corner.x += speed.z / 50.;
@@ -309,6 +351,8 @@ void main() {
       corner *= 0.5;
       v_windows *= rand(v_cubeID * 65.) * 0.3 + 0.4;
     }
+    if(v_side >=2 && rand(v_cubeID * 607. + float(v_side)) < 0.06)
+      v_flag = v_flag | BILLBOARD;
   } else {
     if(isLane){
       makeCar();
@@ -334,13 +378,12 @@ void main() {
       makeAttachment();
       corner.z *= -1.;
     } else {
-      gl_Position = vec4(0.);
       return;
     }
   }
 
   if(!isElevator){
-    v_uv.x = ((sideID==2 || sideID==3)?corner.x:corner.y) * 0.5 + 0.5;  
+    v_uv.x = ((sideID==2 || sideID==3)?corner.x:-corner.y)*((sideID==3 || sideID==5)?-1.:1.) * 0.5 + 0.5;  
     v_uv.y = ((sideID==0 || sideID==1)?corner.y:corner.z) * 0.5 + 0.5;
   }
 
@@ -351,11 +394,10 @@ void main() {
   corner.xy = edges0 * (1. - corner01) + edges1 * corner01;
 
   corner *= u_blockSize;
+  corner *= 0.99999;
   vec3 position = corner * 0.5;
   position += slot * u_blockSize + shift;  
   v_position = position;
-  //v_normal = vec3(0., 0., 1.)
-  v_slot = slot;
   gl_Position = u_worldViewProjection * vec4(position, 1.);  
 }
 
