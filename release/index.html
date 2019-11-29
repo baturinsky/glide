@@ -16,8 +16,8 @@
   canvas {
     position: fixed;
     display: block;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     image-rendering: pixelated;
   }
 
@@ -29,7 +29,7 @@
     bottom:0px;
     left:0px;
     color: white;
-    width: 100%;
+    width: 100%;  
     text-align: center;
     text-shadow: 2px 2px 1px black;
   }
@@ -76,7 +76,7 @@
   <div class="orbs" id="orbs"></div>
   <div class="stats" id="stats"></div>
   <div class="pause" id="pause">
-    <h2>City Without Bounds</h2>
+    <h2>A Boundless City</h2>
     <b>Paused</b><br/><br/>
     Collect black orbs ⚫ as fast as possible.<br/>
     Turn with with mouse. LMB click to accelerate (costs 1 orb), RMB click to slow down (free).<br/>
@@ -89,7 +89,16 @@
 precision highp float;
 precision highp int;
 
+const int BASE = 1;
+const int BILLBOARD = 2;
+const int STAR = 4;
+
+const float PI = 3.141592653589793;
+const float PI2 = 2. * PI;
+const float radToDeg = 90. / PI;
+
 uniform float u_time;
+uniform sampler2D u_text;
 
 in vec2 v_uv;
 in vec3 v_position;
@@ -110,12 +119,75 @@ layout(location=0) out vec4 outNormal;
 //layout(location=0) out vec4 outColor;
 //layout(location=2) out vec3 outPosition;
 
-const float radToDeg = 90. / 3.141;
-
 float rand(float n){return fract(sin(n) * 43758.5453123);}
 
 float rand2(vec2 n) { 
 	return fract(sin(dot(n, vec2(12.9898, 4.1414))) * 43758.5453);
+}
+
+vec2 upolar(vec2 uv){
+  return vec2(cos(uv.x * PI2), sin(uv.y * PI2)) * 0.5 + 0.5;
+}
+
+vec2 polar(vec2 uv){
+  float l = distance(uv, vec2(0.5));
+  uv = uv *2. - 1.;
+  float a = atan(uv.x, uv.y);
+  return vec2(cos(a) * l, sin(a) * l) * 0.5 + 0.5;
+}
+
+vec2 scaleUV(vec2 uv, float variant){
+  return uv * vec2(rand(variant + 1.)+0.5, rand(variant + 2.)+0.5);
+}
+
+bool animationSinus(vec2 uv, float time, float variant){
+  return fract(sin(uv.x * 13.)/sin(uv.y * 11.) * (.5 + rand(variant * 300.)) + 0.1 * time * (1. + variant)) > variant + 0.1;
+}
+
+bool animationCircles(vec2 uv, float time, float variant){
+  return fract(sin(uv.x * 45.) * cos(uv.y *53. + variant * sin(time)) + time) * 0.8 > variant;
+}
+
+bool animationBars(vec2 uv, float time, float variant){
+  return ((rand(floor(10. * (variant + uv.x - sin(time*0.1))))*.5 + .4 - uv.y) * (1.5 + sin(time *0.1) * rand(variant)) > variant)
+    || fract(uv.x * 200.) > fract(uv.y * 200.) * 5.;
+}
+
+bool animationGridscape(vec2 uv, float time, float variant){
+  float d = tan(uv.y + 0.3);
+  return mod((uv.x - 0.5) * d,0.2)<0.01 || mod(d + time*0.5,0.2)<0.01;
+}
+
+bool animation(vec2 uv, float time, float variant){
+  bool down = rand(variant*71.) > 0.5;
+  if(uv.y < 0.15 && down || uv.y > 0.85 && !down )
+    return 
+      (texture(u_text, vec2( uv.x*0.7 + u_time*0.4, -uv.y*1.11 + (down?-0.003:0.03) + floor(variant*8.) * 0.125)).r > 0.8) 
+      != (rand(variant*51.) > 0.6);
+
+  uv = scaleUV(uv, v_cubeID);
+
+  int v = int(floor(rand(variant * 976.) * 4.));
+  switch(v){
+    case 0:
+      return animationSinus(uv, time, variant);
+    case 1:
+      return animationCircles(uv, time, variant);
+    case 2:
+      return animationBars(uv, time, variant);
+    default:
+      return animationGridscape(uv, time, variant);
+  }
+}
+
+void drawBillboard(){
+  vec2 d2 = abs(v_uv - 0.5);
+  float d = max(d2.x, d2.y);
+  bool lit = 
+    d>0.48 ? true:
+    d<0.48 && d>0.46 ? false:
+    animation(v_uv, u_time, rand(v_cubeID * 123. + float(v_side)));
+  normal.a = lit?1.:0.;
 }
 
 void drawWindows(){
@@ -126,7 +198,7 @@ void drawWindows(){
   vec2 r = .5 - v_windowMargin;
   vec2 d = abs(v_uv - 0.5);
 
-  if((v_flag & 1) != 0){
+  if((v_flag & BASE) != 0){
     d.y -= v_windowMargin.y;
   }
 
@@ -144,7 +216,7 @@ void drawWindows(){
 
   if(window){
     vec2 windowId = floor(wuv * v_windows);
-    bool lit = v_windows == vec2(1.) || fract(rand2(windowId*0.01 + v_cubeID + float(v_side) * 0.13) * (u_time / 1000. + 1.)) > 0.3;
+    bool lit = v_windows == vec2(1.) || fract(rand2(windowId*0.01 + v_cubeID * 101. + float(v_side) * 0.13) * (u_time / 1000. + 1.)) > 0.5;
     if(!lit)
       window = false;
   }
@@ -170,7 +242,20 @@ void main() {
 
   //normal.xyz = v_normal;
 
-  drawWindows();  
+  if((v_flag & STAR) != 0){
+    outNormal.r = 1.;
+    return;
+  }
+
+  if(!gl_FrontFacing){
+    outNormal.b = 1.;
+    return;  
+  }
+
+  if((v_flag & BILLBOARD) != 0)
+    drawBillboard();
+  else
+    drawWindows();  
 
   //drawUV();
   
@@ -222,14 +307,19 @@ const int CLOSER = 3;
 const int LEFT = 4;
 const int RIGHT = 5;
 
+const int BASE = 1;
+const int BILLBOARD = 2;
+const int STAR = 4;
+
 uniform mat4 u_worldViewProjection;
 uniform float u_time;
 uniform vec3 u_origin;
+uniform vec3 u_eye;
 uniform vec3 u_citySize;
 uniform float u_blockSize;
-//uniform sampler3D u_noise;
 uniform float u_a;
 uniform float u_b;
+uniform int[100] u_collected;
 
 out vec2 v_uv;
 out vec3 v_position;
@@ -256,6 +346,24 @@ float rand2(vec2 v) {
 
 float rand3(vec3 v){
   return rand2(v.xy + v.yz * 21.);
+}
+
+bool bit(int n, int b){
+  return floor(mod(float(n) / pow(2., float(b)), 2.)) == 1.;
+} 
+
+bool collected(int b){
+  return bit(u_collected[b/16], int(mod(float(b),16.)));
+}
+
+float slotCubeId(vec3 slot){
+  return rand3(slot * 3.142);
+}
+
+int hashAt(vec3 at){
+  vec3 slot = round(at / u_blockSize);
+  float cube = slotCubeId(slot);
+  return int(floor(cube * 1000.));
 }
 
 /*float snoise(vec3 v){ 
@@ -295,6 +403,10 @@ bool hasBlockIn(vec3 slot){
   return isPillar(slot) || rand3(slot) > 0.92;
 }
 
+bool hasStarIn(vec3 slot){
+  return mod(slot, 2.) == vec3(1., 0., 1.) && !isPillar(slot) && rand3(slot) < 0.2;
+}
+
 vec3 hasSpeed(vec3 slot){
   if(isElevator){
     return vec3(0., 0., (floor(rand(slot.z) * 4.) - 1.5) * 20.);
@@ -328,7 +440,7 @@ void makeBase(){
   corner.xy *= radius;
   corner.z *= corner.z<0.?1.:-0.25 - 0.2 * rand(v_cubeID*243.);
   if(radius < 1.){
-    v_flag = v_flag | 1;
+    v_flag = v_flag | BASE;
     v_windows = floor(v_windows / 2.);
     v_windowMargin = vec2(.3, 1.);
   } else {
@@ -361,13 +473,6 @@ void makeRoof2(){
   //normal.z -= .5;
 }
 
-void makeConnector(){
-  corner.xy *= 0.2 + 0.2 * rand(columnID + 19.);
-  if(rand(columnID + 21.) > 0.7)
-    corner = (rotationZ(radians(45.)) * vec4(corner, 1.)).xyz;
-  //v_windows.x = floor(v_windows.x*0.7);      
-  //v_windows *= 0.;
-}
 
 void makeSlope(){
   if(corner.z < 0.)
@@ -383,6 +488,15 @@ void makeSlope(){
       v_windows *= 0.;
   }
 }
+
+void makeConnector(){
+  corner.xy *= 0.2 + 0.2 * rand(columnID + 19.);
+  if(rand(columnID + 21.) > 0.7)
+    corner = (rotationZ(radians(45.)) * vec4(corner, 1.)).xyz;
+  //v_windows.x = floor(v_windows.x*0.7);      
+  //v_windows *= 0.;
+}
+
 
 void makeAttachment(){
   int attachmentKind = int(rand(v_cubeID * 341.) * 4.);
@@ -427,27 +541,31 @@ void main() {
 
   vec3 slot = vec3(cubeOrder % cw, cubeOrder / cw % cd, cubeOrder / cw / cd % ch) + u_origin;
 
-  isElevator = isPillar(slot + vec3(0., 1., 0.));
+  //isElevator = isPillar(slot + vec3(0., 1., 0.));
 
   speed = hasSpeed(slot);
+
+  bool moving = speed != vec3(0.);
+  bool isLane = speed.xy != vec2(0.);
+
+  /*if(isLane)
+    isElevator = false;*/
+
   vec3 shift;
-  
   if(isElevator){
     shift = mod(speed * u_time, u_blockSize * u_citySize);    
     //shift = speed * u_time;
   } else {
     //shift = mod(speed * u_time, u_blockSize * u_citySize);
     shift = speed * u_time;
-    slot = floor((slot * u_blockSize - shift) / u_blockSize);
+    slot = slot - floor(shift / u_blockSize);
   }
 
-
-  bool moving = speed != vec3(0.);
-  bool isLane = speed.xy != vec2(0.);
+  v_slot = slot;
 
   columnID = rand2(slot.xy);
 
-  v_cubeID = rand(slot[0] + slot[1] * 1e4 + slot[2] * 1e8);
+  v_cubeID = slotCubeId(slot);
 
   bool isBlock = hasBlockIn(slot);  
   
@@ -501,7 +619,16 @@ void main() {
   v_windowSize = vec2(rand(columnID + 15.), rand(columnID + 16.)) * 0.6 + 0.4;
   v_windowMargin = max(vec2(rand(columnID + 17.) * 0.25, rand(columnID + 18.) * 0.15) - 0.05, 0.);
 
-  if(isElevator){
+  if(hasStarIn(slot)){
+    float r = v_cubeID + float(gl_VertexID % 36) + 11.;
+    int hash = hashAt(slot * u_blockSize);
+    if(collected(hash)){
+      return;
+    }
+    corner = vec3(sin(rand(r)*10. + u_time), sin(rand(r + 2.)*10. + u_time), sin(rand(r + 3.)*10. + u_time))*0.2;
+    corner *= max(1., 100. / distance(slot * u_blockSize, u_eye));
+    v_flag = v_flag | STAR;
+  } else if(isElevator){
     v_uv.xy = corner.xz * 0.4 + 0.45;
     corner *= 0.1;
     corner.x += speed.z / 50.;
@@ -514,6 +641,8 @@ void main() {
       corner *= 0.5;
       v_windows *= rand(v_cubeID * 65.) * 0.3 + 0.4;
     }
+    if(v_side >=2 && rand(v_cubeID * 607. + float(v_side)) < 0.06)
+      v_flag = v_flag | BILLBOARD;
   } else {
     if(isLane){
       makeCar();
@@ -539,13 +668,12 @@ void main() {
       makeAttachment();
       corner.z *= -1.;
     } else {
-      gl_Position = vec4(0.);
       return;
     }
   }
 
   if(!isElevator){
-    v_uv.x = ((sideID==2 || sideID==3)?corner.x:corner.y) * 0.5 + 0.5;  
+    v_uv.x = ((sideID==2 || sideID==3)?corner.x:-corner.y)*((sideID==3 || sideID==5)?-1.:1.) * 0.5 + 0.5;  
     v_uv.y = ((sideID==0 || sideID==1)?corner.y:corner.z) * 0.5 + 0.5;
   }
 
@@ -556,11 +684,10 @@ void main() {
   corner.xy = edges0 * (1. - corner01) + edges1 * corner01;
 
   corner *= u_blockSize;
+  corner *= 0.99999;
   vec3 position = corner * 0.5;
   position += slot * u_blockSize + shift;  
   v_position = position;
-  //v_normal = vec3(0., 0., 1.)
-  v_slot = slot;
   gl_Position = u_worldViewProjection * vec4(position, 1.);  
 }
 
@@ -741,12 +868,20 @@ uniform sampler2D u_normal;
 uniform sampler2D u_depth;
 //uniform sampler2D u_position;
 
-in vec2 v_texCoord;
+in vec2 v_uv;
 
 out vec4 outColor;
 
 float rand(vec2 co){
     return fract(sin(dot(co ,vec2(12.9898,78.233))) * 43758.5453);
+}
+
+float rand2(vec2 v) { 
+	return fract(sin(dot(v, vec2(12.9898, 4.1414))) * 43758.5453);
+}
+
+float rand3(vec3 v){
+  return rand2(v.xy + v.yz * 21.);
 }
 
 vec3 normalAt(vec2 at){
@@ -760,15 +895,15 @@ float shinyAt(vec2 at){
 vec3 positionAt(vec2 at){
   //return texture(u_position, at).xyz;
 
-  vec4 depth = texture(u_depth, at);
-  vec4 p1 = vec4(at*2. - 1., depth.r*2. -1., 1.);
+  float depth = texture(u_depth, at).r;
+  vec4 p1 = vec4(at*2. - 1., depth*2. - 1., 1.);
   vec4 p2 = u_inverseWorldViewProjection * p1;
   vec4 position = p2 / p2.w;
   return position.xyz;
 }
 
 float depthAt(vec2 coord){
-  //return texture(u_color, v_texCoord).a;
+  //return texture(u_color, v_uv).a;
   //return texture(u_depth, coord).r;
   //return 1. - u_b / (texture(u_depth, coord).r - u_a) * 2.;
   float fd = texture(u_depth, coord).r * 2. - 1.;
@@ -787,7 +922,7 @@ float getOcclusionPoint(vec3 position, vec3 normal, vec2 occluderXY) {
 float getTotalOcclusion(vec3 position, vec3 normal){
   float occlusion = 0.0;
   
-  float depth = (depthAt(v_texCoord) - u_near) / (u_far - u_near);
+  float depth = (depthAt(v_uv) - u_near) / (u_far - u_near);
 
   float kernelRadius = c_sampleRadius * (1.0 - depth);
   vec2 rand = normalize(vec2(rand(position.xy), rand(position.xy*3.141)));
@@ -797,10 +932,10 @@ float getTotalOcclusion(vec3 position, vec3 normal){
       vec2 k2 = vec2(k1.x * SIN45 - k1.y * SIN45, k1.x * SIN45 + k1.y * SIN45);
       k1 *= kernelRadius;
       k2 *= kernelRadius;
-      occlusion += getOcclusionPoint(position, normal, v_texCoord + k1);
-      occlusion += getOcclusionPoint(position, normal, v_texCoord + k2 * 0.75);
-      occlusion += getOcclusionPoint(position, normal, v_texCoord + k1 * .5);
-      occlusion += getOcclusionPoint(position, normal, v_texCoord + k2 * 0.25);
+      occlusion += getOcclusionPoint(position, normal, v_uv + k1);
+      occlusion += getOcclusionPoint(position, normal, v_uv + k2 * 0.75);
+      occlusion += getOcclusionPoint(position, normal, v_uv + k1 * .5);
+      occlusion += getOcclusionPoint(position, normal, v_uv + k2 * 0.25);
   }
   occlusion = clamp(occlusion / 8.0, 0.0, 1.0);  
   return occlusion;
@@ -827,55 +962,66 @@ vec3 fogColor(vec3 ray){
   return vec3(mod(aVer, .5) < 0.03 || mod(aHor, .5) < 0.03?.5:0.);*/
 }
 
+
+float slotCubeId(vec3 slot){
+  return rand3(slot * 3.142);
+}
+
+int hashAt(vec3 at){
+  vec3 slot = round(at / u_blockSize);
+  float cube = slotCubeId(slot);
+  return int(floor(cube * 1000.));
+}
+
 void main() {
 
-  vec4 screenPos = vec4(v_texCoord.x * 2. - 1., v_texCoord.y * 2. - 1., 0., 1.);
-  vec3 ray = normalize((u_raycastProjection * screenPos).xyz);  
+  if(gl_FragCoord.y<1. && gl_FragCoord.x<1.){
+    outColor = vec4(0.);
+    vec4 center = texture(u_normal, vec2(0.5));
+    
+    bool crashed = center.b!=0.;
+    bool starNearby = center.r!=0. && depthAt(vec2(0.5)) < 50.;
 
-  vec2 scale = 1. / u_bufferSize;
+    if(starNearby)
+      outColor.g = float(hashAt(positionAt(vec2(0.5))));
+    else if(crashed)
+      outColor.r = 1.;
+    return;
+  }
 
-  //vec4 diffuseColor = texture(u_color, v_texCoord);
-  
-  //diffuseColor.xyz += vec3(depth / 1000.);
+  float depth = depthAt(v_uv);
 
-  vec3 normal = normalAt(v_texCoord);
-  float depth = depthAt(v_texCoord);
-
-  //diffuseColor = vec4(normal * 2. + 1., 1.);
-  //normal = vec3(0.);
-
-  //vec4 light = vec4(1.);
-
-  vec3 position = positionAt(v_texCoord);
-
-  float shiny = shinyAt(v_texCoord);
-  vec4 litColor = vec4(vec3(shiny), 1.);
+  vec4 normal = texture(u_normal, v_uv);
+  vec4 litColor = vec4(normal.rgb + normal.a, 1.);
 
   for(int i=0;i<4;i+=2){
-    vec2 at = v_texCoord + kernel[i] / u_bufferSize[i/2] * max(2., (900. / (300. + depth)));
+    vec2 at = v_uv + kernel[i] / u_bufferSize[i/2] * max(2., (600. / (300. + depth)));
     float d = abs(depth - depthAt(at));
-    //float dn = length(normal - normalAt(at));
-    if(d > 20. /*|| dn > 0.1*/){
-      //litColor *= 10.;
-      //litColor.xyz *= .2;
-      //litColor.xyz = vec3(10. - depth / 50.);
+    if(d > 10.){
       litColor.xyz = vec3(10.); 
       break;
     }
   }
 
+  if(normal.r > 0.){
+    litColor.rgb *= length(sin(v_uv.x * 1000.) + sin(v_uv.y * 1000.)) * 0.5;
+  }
+
 
   litColor.xyz *= 1. - depth / 1500.;
+  outColor = litColor;
 
-  //float depth = (depthAt(v_texCoord) - 0.996) * 100.;
-  //litColor.rgb *= depthAt(v_texCoord) / 5000.;
+}
+
+
+  //float depth = (depthAt(v_uv) - 0.996) * 100.;
+  //litColor.rgb *= depthAt(v_uv) / 5000.;
 
   /*float occlusion = getTotalOcclusion(position, normal);
   litColor -= occlusion * 10.;*/
 
   //litColor.xyz = normal + 1.;
 
-  outColor = litColor;
 
   //outColor = vec4(vec3(position.z / 1000.), 1.);
 
@@ -902,7 +1048,6 @@ void main() {
 
   //litColor = vec4(normal, 1.);
 
-}
 
   //vec3 surfaceToLight = normalize(u_light[0].pos/* - position*/);
 
@@ -936,7 +1081,7 @@ precision highp float;
 uniform float u_resolution;
 uniform float u_side;
 
-in vec2 v_texCoord;
+in vec2 v_uv;
 
 out float outColor;
 
@@ -1023,7 +1168,7 @@ vec3 vec2toVec3(vec2 v){
 }
 
 void main() {
-  vec3 pos = vec2toVec3(v_texCoord);
+  vec3 pos = vec2toVec3(v_uv);
   
   outColor = snoise(pos / u_resolution * 10.);
   //outColor = pos.x / u_resolution;
@@ -1034,11 +1179,11 @@ precision highp float;
 in vec4 position;
 
 out vec4 v_position;
-out vec2 v_texCoord;
+out vec2 v_uv;
 
 void main() {
   gl_Position = position;
-  v_texCoord = position.xy*0.5 + vec2(0.5);
+  v_uv = position.xy*0.5 + vec2(0.5);
 }</script>
 <script id="raymarch-f.glsl" type="glsl">#version 300 es
 
@@ -1331,12 +1476,12 @@ const float rscale = 1.;
 uniform sampler2D u_color;
 uniform vec2 u_bufferSize;
 
-in vec2 v_texCoord;
+in vec2 v_uv;
 
 out vec4 outColor;
 
 void main() {
-  vec4 srcColor = texture(u_color, v_texCoord);
+  vec4 srcColor = texture(u_color, v_uv);
   vec3 color = pow(srcColor.xyz, vec3(1.0/2.2) );
   if(length(color) > 2.){
     color /= pow(length(color), 0.4);

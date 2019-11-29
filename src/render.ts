@@ -397,11 +397,11 @@ function createText(): WebGLTexture {
   let texts = [
     "無限の都市",
     "Music by ...",
-    "Привет DTF.ru",
+    "एक असीम शहर",
     "Добро пожаловать в Омск",
     "Design&code by @baturinsky",
     "Thanks to Procjam Discord",
-    "Written in GLSL",
+    "Written in GLSL (mostly)",
     "A Boundless City"
   ];
   ctx.canvas.width = 1024;
