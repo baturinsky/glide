@@ -122,3 +122,21 @@ export let loadBytes = (uri: string) =>
 export function countIf(iterable, predicate) {
   iterable.reduce((sum, value) => sum + (value ? 1 : 0));
 }
+
+export async function playFile(uri: string) {
+  const audio = new Audio(uri);
+  audio.loop = true;
+
+  const audioCtx = new window.AudioContext();
+  const source = audioCtx.createMediaElementSource(audio);
+
+  const gainNode = audioCtx.createGain();
+  gainNode.gain.setValueAtTime(1.0, 0);
+
+  source.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+
+  audio.play();
+
+  return {context:audioCtx, gain:gainNode};
+}

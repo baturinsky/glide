@@ -4757,6 +4757,20 @@
             request.send();
         });
     }
+    function playFile(uri) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const audio = new Audio(uri);
+            audio.loop = true;
+            const audioCtx = new window.AudioContext();
+            const source = audioCtx.createMediaElementSource(audio);
+            const gainNode = audioCtx.createGain();
+            gainNode.gain.setValueAtTime(1.0, 0);
+            source.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            audio.play();
+            return { context: audioCtx, gain: gainNode };
+        });
+    }
 
     const voxResolution = 200;
     const noiseResolution = 200;
@@ -4891,7 +4905,7 @@
             /*let tcam = m4.inverse(m4.lookAt([0,-1,0], [0, 0, 0], [1, 0, 0]));
             console.log(tcam);
             console.log( m4.transformPoint(tcam, [10,100,0]) )*/
-            render = (time, eye, direction, collected, checkpoint, previousCheckpoint) => {
+            render = (time, eye, direction, collected, checkpoint, previousCheckpoint, musicTime) => {
                 const fov = (40 * Math.PI) / 180;
                 const aspect = canvas.clientWidth / canvas.clientHeight;
                 const zNear = 5;
@@ -4949,7 +4963,8 @@
                     u_noise: noise,
                     u_checkpoint: checkpoint,
                     u_previousCheckpoint: previousCheckpoint,
-                    u_text: textTexture
+                    u_text: textTexture,
+                    u_musicTime: musicTime
                 };
                 Object.assign(lightPass.uniforms, uniforms);
                 polyPass.uniforms = uniforms;
@@ -5172,7 +5187,8 @@
         ["rewindCheckpoint", [3000]],
         ["pickup", [2000]],
         ["friction", [100, 200, 500, 1000, 2000]],
-        ["time", [500, 1000, 2000, 5000, 10000]],
+        ["time", [100, 200, 500, 1000, 2000]]
+        //["lane", [1000]]
     ];
     const upgradeDescriptions = {
         brake: "Brake on <b>right mouse click</b>",
@@ -5183,7 +5199,8 @@
         rewindCheckpoint: "You get 1 more rewind when reaching checkpoint.",
         pickup: "You can collect checkpoint from a longer disance",
         friction: "Air friction is reduced by {0/10%/20%/30%/40%/50%}",
-        time: "Time limit for reaching checkpoint is increased by {0/10%/20%/30%/40%/50%}",
+        time: "Time limit for reaching checkpoint is increased by {0/10%/20%/30%/40%/50%}"
+        //lane: "When you are in car lane, you are accelerated in the lane direction"
     };
     const rad = Math.PI / 180;
     const acc = 300;
@@ -5200,14 +5217,16 @@
     let fps = 60;
     let state;
     let lsbs = localStorage["boundlessCity"];
-    let storage = lsbs ? JSON.parse(lsbs) : {
-        upgrades: {},
-        coins: 100
-    };
-    function save() {
+    let storage = lsbs
+        ? JSON.parse(lsbs)
+        : {
+            upgrades: {},
+            coins: 100
+        };
+    function save(bonusCoins = 0) {
         localStorage["boundlessCity"] = JSON.stringify({
             upgrades,
-            coins
+            coins: coins + bonusCoins
         });
     }
     let upgrades = storage.upgrades;
@@ -5219,7 +5238,7 @@
             timeLeft: 20,
             collected: new Uint8Array(1000),
             thisRunCoins: 0,
-            boosts: (upgrades.boosts || 0),
+            boosts: upgrades.boosts || 0,
             lives: (upgrades.rewind || 0) + 1,
             previousCheckpoint: initState(),
             checkpoint: [20, 0, -3],
@@ -5231,7 +5250,8 @@
     }
     let game = initGame();
     function upgradeCost(upgrade) {
-        let r = possibleUpgrades.find(u => u[0] == upgrade)[1][upgrades[upgrade] || 0] || 1e9;
+        let r = possibleUpgrades.find(u => u[0] == upgrade)[1][upgrades[upgrade] || 0] ||
+            1e9;
         //console.log(upgrade, r);
         return r;
     }
@@ -5252,7 +5272,7 @@
     const gameOverReasons = [
         "",
         "You have crashed into something solid. Or something solid has crashed into you.",
-        "You have run out of time."
+        "You have run out of time. You remember that <span style='color:#0f0'>checkpoints</span> extend time, right?"
     ];
     function gameOver() {
         return game.over;
@@ -5283,10 +5303,12 @@
         state.vel += orbSpeedBonus * (1 + 0.25 * (upgrades.clasterFaster || 0));
         if (hash >= 0)
             game.collected[hash] = 1;
+        save(game.thisRunCoins);
     }
     function remember() {
         game.previousCheckpoint = JSON.parse(JSON.stringify(state));
-        game.previousCheckpoint.pos = copy(game.checkpoint).map(v => v * blockSize);
+        game.previousCheckpoint.pos = copy(game.checkpoint)
+            .map(v => v * blockSize);
         console.log(game.previousCheckpoint);
     }
     function rewind() {
@@ -5319,20 +5341,26 @@
         let r = random(frame + length$1(game.checkpoint));
         remember();
         let normHorDir = normalize([dir[0], dir[1], 0]);
-        let shift = [r(), r(), r()].map((v, i) => Math.floor(v % 20 - 10 + (i == 2 ? -5 : normHorDir[i] * 40)));
-        game.checkpoint = add(shift, game.checkpoint);
+        let shift = [r(), r(), r()].map((v, i) => Math.floor((v % 1500) / 100 - 10 + (i == 2 ? -3 + game.checkpoints : normHorDir[i] * 30)) *
+            (1 + 0.2 * game.checkpoints));
+        game.checkpoint = add(shift, game.checkpoint).map(n => Math.floor(n));
     }
     function updateUpgrades() {
-        upgradesDiv.innerHTML = `
+        upgradesDiv.innerHTML =
+            `
   <div>Level</div><div>Cost</div><div> </div><div>Upgrade</div>
-  ` + possibleUpgrades.map(u => `<div>${upgrades[u[0]] || 0}/${u[1].length}</div><div>${u[1][upgrades[u[0]] || 0] || "MAX"}</div>      
-    <button ${upgradeCost(u[0]) > coins ? 'disabled' : ''} onclick="buy('${u[0]}')">Buy!</button>
-    <div style="text-align: left;">${highlightCurrentLevel(upgradeDescriptions[u[0]], upgrades[u[0]] || 0)}</div>`).join("")
-            + `<div>Coins:</div><div class="coin">${coins}</div>
+  ` +
+                possibleUpgrades
+                    .map(u => `<div>${upgrades[u[0]] || 0}/${u[1].length}</div><div>${u[1][upgrades[u[0]] || 0] || "MAX"}</div>      
+    <button ${upgradeCost(u[0]) > coins ? "disabled" : ""} onclick="buy('${u[0]}')">Buy!</button>
+    <div style="text-align: left;">${highlightCurrentLevel(upgradeDescriptions[u[0]], upgrades[u[0]] || 0)}</div>`)
+                    .join("") +
+                `<div>Coins:</div><div class="coin">${coins}</div>
   `;
     }
     let loopId;
     window.onload = (e) => __awaiter(void 0, void 0, void 0, function* () {
+        let music = yield playFile("/Boundless_City.mp3");
         let renderHQ = yield prepareRender(crash, collectCluster, 2);
         let renderLQ = yield prepareRender(crash, collectCluster, 1);
         let render = renderHQ;
@@ -5375,6 +5403,14 @@
                 render = render == renderHQ ? renderLQ : renderHQ;
                 return;
             }
+            if (e.code == "KeyM") {
+                if (music.context.state === "running") {
+                    music.context.suspend();
+                }
+                else {
+                    music.context.resume();
+                }
+            }
         });
         canvas.addEventListener("mousedown", e => {
             if (!active())
@@ -5397,7 +5433,7 @@
         pause();
         updateUpgrades();
         function renderFrame() {
-            render(state.time, state.pos, dir, game.collected, game.checkpoint, game.previousCheckpoint.pos.map(v => v / blockSize));
+            render(state.time, state.pos, dir, game.collected, game.checkpoint, game.previousCheckpoint.pos.map(v => v / blockSize), music.context.currentTime);
         }
         function runLoop() {
             if (!loopId)
@@ -5409,7 +5445,7 @@
             frame++;
             winDiv.style.visibility = gameOver() ? "visible" : "hidden";
             if (gameOver()) {
-                winDiv.innerHTML = `<h2>Run complete</h2> ${gameOverReasons[game.over]} You have collected <b>${game.thisRunCoins}</b> coins in <b>${Math.floor(state.time)} seconds!</b><br/><br/> <button onclick="restartGame()"><b>R</b>estart</button>`;
+                winDiv.innerHTML = `<h2>Run complete</h2> ${gameOverReasons[game.over]} <br/> You have collected <b>${game.thisRunCoins}</b> coins in <b>${Math.floor(state.time)} seconds!</b><br/><br/> <button onclick="restartGame()"><b>R</b>estart</button>`;
                 return;
             }
             if (!active() && frame > 1) {
@@ -5446,7 +5482,7 @@
             if (keyboard.pressed["KeyL"]) {
                 state.vel = Math.max(0, state.vel - acc * dTime);
             }
-            state.vel *= 1 - (friction * (1 - (upgrades.friction || 0) * 0.1)) * dTime;
+            state.vel *= 1 - friction * (1 - (upgrades.friction || 0) * 0.1) * dTime;
             if (state.vel <= minimumVelocity) {
                 let drop = minimumVelocity - state.vel / 100;
                 state.pos[2] -= drop * heightToSpeed;
@@ -5467,7 +5503,8 @@
       <div>Time: <b style="color:#8ff">${Math.floor(game.timeLeft)}</b></div>
       `;
             }
-            if (distance(game.checkpoint, divScalar(state.pos, blockSize)) < (1. * (1 + (upgrades.pickup || 0) * 1))) {
+            if (distance(game.checkpoint, divScalar(state.pos, blockSize)) <
+                1 * (1 + (upgrades.pickup || 0) * 1)) {
                 collectCheckpoint();
             }
             renderFrame();

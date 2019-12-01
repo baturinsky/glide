@@ -212,15 +212,31 @@ export async function prepareRender(
 
   let collectedBits = new Int32Array(100);
 
-  let render: (time: number, eye: Vec3, direction: Vec3, collected: Uint8Array, checkpoint: Vec3, previousCheckpoint: Vec3) => void;
+  let render: (
+    time: number,
+    eye: Vec3,
+    direction: Vec3,
+    collected: Uint8Array,
+    checkpoint: Vec3,
+    previousCheckpoint: Vec3,
+    musicTime: number
+  ) => void;
 
   //gl.enable(gl.CULL_FACE);
-  
+
   /*let tcam = m4.inverse(m4.lookAt([0,-1,0], [0, 0, 0], [1, 0, 0]));
   console.log(tcam);
   console.log( m4.transformPoint(tcam, [10,100,0]) )*/
 
-  render = (time: number, eye: Vec3, direction: Vec3, collected: Uint8Array, checkpoint: Vec3, previousCheckpoint: Vec3) => {
+  render = (
+    time: number,
+    eye: Vec3,
+    direction: Vec3,
+    collected: Uint8Array,
+    checkpoint: Vec3,
+    previousCheckpoint: Vec3,
+    musicTime: number
+  ) => {
     const fov = (40 * Math.PI) / 180;
     const aspect = canvas.clientWidth / canvas.clientHeight;
     const zNear = 5;
@@ -256,7 +272,7 @@ export async function prepareRender(
     let center = v3.add(eye, v3.mulScalar(direction, 15 * blockSize));
     let origin = center.map((x, i) =>
       Math.floor(x / blockSize - citySize[i] / 2)
-    );    
+    );
 
     //console.log(origin);
 
@@ -292,7 +308,8 @@ export async function prepareRender(
       u_noise: noise,
       u_checkpoint: checkpoint,
       u_previousCheckpoint: previousCheckpoint,
-      u_text: textTexture
+      u_text: textTexture,
+      u_musicTime: musicTime
     };
 
     Object.assign(lightPass.uniforms, uniforms);

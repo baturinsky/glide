@@ -12,6 +12,7 @@ const float PI2 = 2. * PI;
 const float radToDeg = 90. / PI;
 
 uniform float u_time;
+uniform float u_musicTime;
 uniform sampler2D u_text;
 
 in vec2 v_uv;
@@ -134,7 +135,7 @@ void drawWindows(){
       window = false;
   }
   
-  normal.a = window?windowness:0.;
+  normal.a = (window?windowness:0.) * (0.8 + sin(u_musicTime/0.35) * 0.1);
 }
 
 void main() {
