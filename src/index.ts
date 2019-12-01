@@ -191,7 +191,7 @@ function collectCluster(hash: number) {
   if (hash >= 0) game.collected[hash] = 1;
   save(game.thisRunCoins);
 }
-f
+
 function fract(n) {
   return n - Math.floor(n);
 }
@@ -348,6 +348,7 @@ window.onload = async e => {
   });
 
   canvas.addEventListener("mousedown", e => {
+    music.start();
     if (!active()) canvas.requestPointerLock();
     else {
       if (e.button == 0 && game.boosts > 0) {

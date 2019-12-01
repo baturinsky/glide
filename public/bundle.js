@@ -4767,8 +4767,14 @@
             gainNode.gain.setValueAtTime(1.0, 0);
             source.connect(gainNode);
             gainNode.connect(audioCtx.destination);
-            audio.play();
-            return { context: audioCtx, gain: gainNode };
+            let started = false;
+            return { context: audioCtx, gain: gainNode, start: () => {
+                    if (!started) {
+                        console.log(123);
+                        started = true;
+                        audio.play();
+                    }
+                } };
         });
     }
 
@@ -5180,12 +5186,12 @@
     }
     const possibleUpgrades = [
         ["brake", [10]],
-        ["boosts", [100, 200, 500, 1000, 2000]],
-        ["boostMore", [100, 200, 500, 1000, 2000]],
+        ["boosts", [100, 200, 300, 400, 500]],
+        ["boostMore", [100, 200, 300, 400, 500]],
         ["clasterFaster", [100, 200, 500, 1000, 2000]],
-        ["rewind", [100, 300, 1000]],
-        ["rewindCheckpoint", [3000]],
-        ["pickup", [2000]],
+        ["rewind", [100, 300, 500]],
+        ["rewindCheckpoint", [1000]],
+        ["pickup", [500]],
         ["friction", [100, 200, 500, 1000, 2000]],
         ["time", [100, 200, 500, 1000, 2000]]
         //["lane", [1000]]
@@ -5314,6 +5320,7 @@
     function rewind() {
         Object.assign(state, JSON.parse(JSON.stringify(game.previousCheckpoint)));
         state.vel = Math.min(state.vel, 30);
+        game.boosts = upgrades.boosts || 0;
         mouseDelta = [0, 0];
     }
     function highlightCurrentLevel(s, level) {
@@ -5413,6 +5420,7 @@
             }
         });
         canvas.addEventListener("mousedown", e => {
+            music.start();
             if (!active())
                 canvas.requestPointerLock();
             else {

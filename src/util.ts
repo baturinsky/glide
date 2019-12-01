@@ -134,9 +134,15 @@ export async function playFile(uri: string) {
   gainNode.gain.setValueAtTime(1.0, 0);
 
   source.connect(gainNode);
-  gainNode.connect(audioCtx.destination);
+  gainNode.connect(audioCtx.destination);  
+  
+  let started = false;
 
-  audio.play();
-
-  return {context:audioCtx, gain:gainNode};
+  return {context:audioCtx, gain:gainNode, start:() => {
+    if(!started){
+      console.log(123);
+      started = true;
+      audio.play();
+    }
+  }};
 }
