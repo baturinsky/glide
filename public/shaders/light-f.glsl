@@ -31,10 +31,8 @@ const float c_bias = .04;
 const vec2 c_attenuation = vec2(1.);
 const float c_sampleRadius = .05;
 
-//uniform sampler2D u_color;
-uniform sampler2D u_normal;
+uniform sampler2D u_everything;
 uniform sampler2D u_depth;
-//uniform sampler2D u_position;
 
 in vec2 v_uv;
 
@@ -52,17 +50,15 @@ float rand3(vec3 v){
   return rand2(v.xy + v.yz * 21.);
 }
 
-vec3 normalAt(vec2 at){
-  return normalize(texture(u_normal, at).xyz*2. - 1.);
+vec3 everythingAt(vec2 at){
+  return normalize(texture(u_everything, at).xyz*2. - 1.);
 }
 
 float shinyAt(vec2 at){
-  return texture(u_normal, at).a;
+  return texture(u_everything, at).a;
 }
 
 vec3 positionAt(vec2 at){
-  //return texture(u_position, at).xyz;
-
   float depth = texture(u_depth, at).r;
   vec4 p1 = vec4(at*2. - 1., depth*2. - 1., 1.);
   vec4 p2 = u_inverseWorldViewProjection * p1;
@@ -71,65 +67,13 @@ vec3 positionAt(vec2 at){
 }
 
 float depthAt(vec2 coord){
-  //return texture(u_color, v_uv).a;
-  //return texture(u_depth, coord).r;
-  //return 1. - u_b / (texture(u_depth, coord).r - u_a) * 2.;
   float fd = texture(u_depth, coord).r * 2. - 1.;
   return 1. - u_b / (fd - u_a);
 }
 
-float getOcclusionPoint(vec3 position, vec3 normal, vec2 occluderXY) {
-    vec3 occluderPosition = positionAt(occluderXY);
-    vec3 positionVec = occluderPosition - position;
-    float intensity = max(dot(normal, normalize(positionVec)) - c_bias, 0.0);
-
-    float attenuation = 1.0 / (c_attenuation.x + c_attenuation.y * length(positionVec));
-    return intensity * attenuation;
-}
-
-float getTotalOcclusion(vec3 position, vec3 normal){
-  float occlusion = 0.0;
-  
-  float depth = (depthAt(v_uv) - u_near) / (u_far - u_near);
-
-  float kernelRadius = c_sampleRadius * (1.0 - depth);
-  vec2 rand = normalize(vec2(rand(position.xy), rand(position.xy*3.141)));
-
-  for (int i = 0; i < 4; ++i) {
-      vec2 k1 = reflect(kernel[i], rand);
-      vec2 k2 = vec2(k1.x * SIN45 - k1.y * SIN45, k1.x * SIN45 + k1.y * SIN45);
-      k1 *= kernelRadius;
-      k2 *= kernelRadius;
-      occlusion += getOcclusionPoint(position, normal, v_uv + k1);
-      occlusion += getOcclusionPoint(position, normal, v_uv + k2 * 0.75);
-      occlusion += getOcclusionPoint(position, normal, v_uv + k1 * .5);
-      occlusion += getOcclusionPoint(position, normal, v_uv + k2 * 0.25);
-  }
-  occlusion = clamp(occlusion / 8.0, 0.0, 1.0);  
-  return occlusion;
-}
-
-
-vec3 skyColor(vec3 ray){
-  vec3 color = (ray + 1.) * (dot(ray, u_toSun)>0.999?10.:1.);
-  float aVer = degrees(atan(ray.x, ray.y));
-  float aHor = degrees(atan(ray.z, length(ray.xy)));
-  color *= mod(aVer, 10.) < 0.1?1.5:1.;
-  color *= mod(aHor, 10.) < 0.1?1.5:1.;
-  color *= mod(aVer, 5.) < 0.1?1.5:1.;
-  color *= mod(aHor, 5.) < 0.1?1.5:1.;
-  color *= mod(aVer, .5) < 0.05?1.5:1.;
-  color *= mod(aHor, .5) < 0.05?1.5:1.;
-  return color;
-}
-
 vec3 fogColor(vec3 ray){
   return vec3(0.);
-  /*float aVer = degrees(atan(ray.x, ray.y));
-  float aHor = degrees(atan(ray.z, length(ray.xy)));
-  return vec3(mod(aVer, .5) < 0.03 || mod(aHor, .5) < 0.03?.5:0.);*/
 }
-
 
 float slotCubeId(vec3 slot){
   return rand3(slot * 3.142);
@@ -143,24 +87,25 @@ int hashAt(vec3 at){
 
 void main() {
 
-  if(gl_FragCoord.y<1. && gl_FragCoord.x<1.){
+  if(gl_FragCoord.y<2. && gl_FragCoord.x<2.){
     outColor = vec4(0.);
-    vec4 center = texture(u_normal, vec2(0.5));
+    vec4 center = texture(u_everything, vec2(0.5));
     
     bool crashed = center.b!=0.;
     bool starNearby = center.r!=0. && depthAt(vec2(0.5)) < 50.;
 
-    if(starNearby)
-      outColor.g = float(hashAt(positionAt(vec2(0.5))));
-    else if(crashed)
-      outColor.r = 1.;
+    if(crashed)
+      outColor.b = 1.;
+    else if(starNearby)
+      outColor.r = float(hashAt(positionAt(vec2(0.5))));
     return;
   }
 
   float depth = depthAt(v_uv);
 
-  vec4 normal = texture(u_normal, v_uv);
-  vec4 litColor = vec4(normal.rgb + normal.a, 1.);
+  vec4 everything = texture(u_everything, v_uv);
+  
+  vec4 litColor = vec4(everything.rgb + everything.a, 1.);
 
   for(int i=0;i<4;i+=2){
     vec2 at = v_uv + kernel[i] / u_bufferSize[i/2] * max(2., (600. / (300. + depth)));
@@ -171,7 +116,7 @@ void main() {
     }
   }
 
-  if(normal.r > 0.){
+  if(everything.r > 0.){
     litColor.rgb *= length(sin(v_uv.x * 1000.) + sin(v_uv.y * 1000.)) * 0.5;
   }
 
@@ -242,3 +187,49 @@ void main() {
     color += skyColor(reflect(-surfaceToView, normal)) * (l > 0. ? pow(max(0., h), u_shininess) : 0.) * u_specular.a * shiny;
   }*/
 
+/*
+float getOcclusionPoint(vec3 position, vec3 normal, vec2 occluderXY) {
+    vec3 occluderPosition = positionAt(occluderXY);
+    vec3 positionVec = occluderPosition - position;
+    float intensity = max(dot(normal, normalize(positionVec)) - c_bias, 0.0);
+
+    float attenuation = 1.0 / (c_attenuation.x + c_attenuation.y * length(positionVec));
+    return intensity * attenuation;
+}
+
+float getTotalOcclusion(vec3 position, vec3 normal){
+  float occlusion = 0.0;
+  
+  float depth = (depthAt(v_uv) - u_near) / (u_far - u_near);
+
+  float kernelRadius = c_sampleRadius * (1.0 - depth);
+  vec2 rand = normalize(vec2(rand(position.xy), rand(position.xy*3.141)));
+
+  for (int i = 0; i < 4; ++i) {
+      vec2 k1 = reflect(kernel[i], rand);
+      vec2 k2 = vec2(k1.x * SIN45 - k1.y * SIN45, k1.x * SIN45 + k1.y * SIN45);
+      k1 *= kernelRadius;
+      k2 *= kernelRadius;
+      occlusion += getOcclusionPoint(position, normal, v_uv + k1);
+      occlusion += getOcclusionPoint(position, normal, v_uv + k2 * 0.75);
+      occlusion += getOcclusionPoint(position, normal, v_uv + k1 * .5);
+      occlusion += getOcclusionPoint(position, normal, v_uv + k2 * 0.25);
+  }
+  occlusion = clamp(occlusion / 8.0, 0.0, 1.0);  
+  return occlusion;
+}
+
+vec3 skyColor(vec3 ray){
+  vec3 color = (ray + 1.) * (dot(ray, u_toSun)>0.999?10.:1.);
+  float aVer = degrees(atan(ray.x, ray.y));
+  float aHor = degrees(atan(ray.z, length(ray.xy)));
+  color *= mod(aVer, 10.) < 0.1?1.5:1.;
+  color *= mod(aHor, 10.) < 0.1?1.5:1.;
+  color *= mod(aVer, 5.) < 0.1?1.5:1.;
+  color *= mod(aHor, 5.) < 0.1?1.5:1.;
+  color *= mod(aVer, .5) < 0.05?1.5:1.;
+  color *= mod(aHor, .5) < 0.05?1.5:1.;
+  return color;
+}
+
+*/

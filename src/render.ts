@@ -27,7 +27,7 @@ const voxResolution = 200;
 const noiseResolution = 200;
 const toSun = v3.normalize([0.1, 0.2, 1]);
 const citySize = [50, 50, 30];
-const blockSize = 32;
+export const blockSize = 32;
 //const toSun = v3.normalize([0., 0., 1]);
 
 export let canvas: HTMLCanvasElement;
@@ -45,7 +45,6 @@ let textTexture: WebGLTexture;
 export async function prepareRender(
   crash: () => void,
   collect: (arg0: number) => void,
-  collected: Uint8Array,
   superSampling: number
 ) {
   canvas = document.getElementById("c") as HTMLCanvasElement;
@@ -120,7 +119,7 @@ export async function prepareRender(
     internalFormat: gl.DEPTH24_STENCIL8
   });
 
-  const normalTexture = createTexture(gl, bufferWH, {
+  const everythingTexture = createTexture(gl, bufferWH, {
     internalFormat: gl.RGBA,
     min: gl.NEAREST
   });
@@ -144,7 +143,7 @@ export async function prepareRender(
     gl,
     [
       //{ attachment: colorTexture },
-      { attachment: normalTexture },
+      { attachment: everythingTexture },
       //{ attachment: positionTexture },
       { format: gl.DEPTH_STENCIL, attachment: depthTexture }
     ],
@@ -183,7 +182,7 @@ export async function prepareRender(
     programs: [quadVs, lightFs],
     uniforms: {
       //u_color: colorTexture,
-      u_normal: normalTexture,
+      u_everything: everythingTexture,
       //u_position: positionTexture,
       u_depth: depthTexture
     },
@@ -213,11 +212,15 @@ export async function prepareRender(
 
   let collectedBits = new Int32Array(100);
 
-  let render: (time: number, pos: Vec3, dir: Vec3) => void;
+  let render: (time: number, eye: Vec3, direction: Vec3, collected: Uint8Array, checkpoint: Vec3, previousCheckpoint: Vec3) => void;
 
   //gl.enable(gl.CULL_FACE);
+  
+  /*let tcam = m4.inverse(m4.lookAt([0,-1,0], [0, 0, 0], [1, 0, 0]));
+  console.log(tcam);
+  console.log( m4.transformPoint(tcam, [10,100,0]) )*/
 
-  render = (time: number, eye: Vec3, direction: Vec3) => {
+  render = (time: number, eye: Vec3, direction: Vec3, collected: Uint8Array, checkpoint: Vec3, previousCheckpoint: Vec3) => {
     const fov = (40 * Math.PI) / 180;
     const aspect = canvas.clientWidth / canvas.clientHeight;
     const zNear = 5;
@@ -231,8 +234,8 @@ export async function prepareRender(
       m4.multiply(perspective, m4.inverse(raycastCamera))
     );
 
-    const viewTransform = m4.inverse(camera);
-    const viewProjectionTransform = m4.multiply(perspective, viewTransform);
+    const inverseCamera = m4.inverse(camera);
+    const viewProjectionTransform = m4.multiply(perspective, inverseCamera);
     const inverseViewProjectionTransform = m4.inverse(viewProjectionTransform);
 
     //console.log(v3.subtract(m4.transformPoint(invertViewProjectionTransform, [0,1,0]), eye));
@@ -250,10 +253,10 @@ export async function prepareRender(
     let zA = (zFar + zNear) / (zFar - zNear);
     let zB = (2.0 * zFar * zNear) / (zFar - zNear);
 
-    let center = v3.add(eye, v3.mulScalar(direction, 12 * blockSize));
+    let center = v3.add(eye, v3.mulScalar(direction, 15 * blockSize));
     let origin = center.map((x, i) =>
       Math.floor(x / blockSize - citySize[i] / 2)
-    );
+    );    
 
     //console.log(origin);
 
@@ -272,7 +275,8 @@ export async function prepareRender(
       u_scale: 100,
       u_depthRange: [zNear, zFar],
       u_bufferSize: bufferWH,
-      u_viewInverse: camera,
+      u_camera: camera,
+      u_inverseCamera: inverseCamera,
       u_near: zNear,
       u_far: zFar,
       u_a: zA,
@@ -286,6 +290,8 @@ export async function prepareRender(
       u_raycastProjection: raycastProjection,
       u_collected: collectedBits,
       u_noise: noise,
+      u_checkpoint: checkpoint,
+      u_previousCheckpoint: previousCheckpoint,
       u_text: textTexture
     };
 
@@ -303,8 +309,8 @@ export async function prepareRender(
     const data = new Float32Array(4);
     gl.readBuffer(gl.COLOR_ATTACHMENT0);
     gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, data);
-    if (data[0]) crash();
-    else if (data[1]) collect(data[1]);
+    if (data[2]) crash();
+    else if (data[0]) collect(data[0]);
 
     renderPass(gl, viewportPass);
   };
@@ -396,7 +402,7 @@ function createText(): WebGLTexture {
   const ctx = document.createElement("canvas").getContext("2d");
   let texts = [
     "無限の都市",
-    "Music by ...",
+    "Music by Ashley Thorpe",
     "एक असीम शहर",
     "Добро пожаловать в Омск",
     "Design&code by @baturinsky",
@@ -408,7 +414,7 @@ function createText(): WebGLTexture {
   ctx.canvas.height = 512;
   ctx.fillStyle = "white";
   ctx.textAlign = "center";
-  ctx.font = "bold 52px Verdana";
+  ctx.font = "bold 48px Verdana";
   for (let i = 0; i < 8; i++) {
     ctx.fillText(texts[i % 8], (ctx.canvas.width / 2) | 0, 64 * (0.5 + i));
   }

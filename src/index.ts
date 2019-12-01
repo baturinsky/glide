@@ -1,107 +1,187 @@
-import { canvas, prepareRender } from "./render";
+import { canvas, prepareRender, blockSize } from "./render";
 import Keyboard from "./Keyboard";
 import { m4, v3 } from "./twgl/twgl-full";
 import { Vec3 } from "./twgl/v3";
 import zzfxInit from "./zzfx";
 import { V2, length } from "./v2";
+import { random } from "./util";
 
 let volume = 1;
+let zzfx: Function;
+let upgradesDiv:HTMLElement;
 
 let sfxDefs = {
-  playerExplode: [10,.1,0,.8,.05,.7,4.6,21.2,.4],
-  explode: [30,.1,1811,.8,.01,1.9,3,.5,.04],
-  powerup: [10,.1,240,.2,.85,5.7,.8,0,.77],
-  shieldDest: [10,.1,1750,.7,.05,.1,1.8,.3,.18],
-  blast: [10,.1,5000,1.7,.01,0,4,0,.45],
+  playerExplode: [1, 0.1, 0, 0.8, 0.05, 0.7, 4.6, 21.2, 0.4],
+  explode: [3, 0.1, 1811, 0.8, 0.01, 1.9, 3, 0.5, 0.04],
+  powerup: [1, 0.1, 240, 0.2, 0.85, 5.7, 0.8, 0, 0.77],
+  shieldDest: [1, 0.1, 1750, 0.7, 0.05, 0.1, 1.8, 0.3, 0.18],
+  blast: [1, 0.1, 5000, 1.7, 0.01, 0, 4, 0, 0.45],
 
-  ponk:[.5, .1, 1549, .1, 0, 0, 1.2, 48.9, .17],
-  
+  ponk: [0.5, 0.1, 1549, 0.1, 0, 0, 1.2, 48.9, 0.17],
+
   //UNUSED BUT COOL
-  boom: [10,.1,3000,1.5,.01,0,4,0,.48],		
-  rumble: [10,.1,200,.7,.1,0,5,.1,.36],
-  sad: [10,.1,264,1.1,.53,0,0,.1,.94],
-  vwom: [10,.1,1,1,.11,0,0,69.2,.95],
-  pop: [10,.1,21,.1,.46,9,.1,5.7,.12],
-  swipe: [10,.1,866,.1,.5,0,1.6,.4,.98],
-  ow: [10,.1,1682,.2,.66,3,0,1.2,.69],
-  wave: [10,.1,1825,1,.2,0,5,.2,.3],
-  bobbleUp: [1,.1,17,1,.26,.2,.1,8,.66],
+  boom: [1, 0.1, 3000, 1.5, 0.01, 0, 4, 0, 0.48],
+  rumble: [1, 0.1, 200, 0.7, 0.1, 0, 5, 0.1, 0.36],
+  sad: [1, 0.1, 264, 1.1, 0.53, 0, 0, 0.1, 0.94],
+  vwom: [1, 0.1, 1, 1, 0.11, 0, 0, 69.2, 0.95],
+  pop: [1, 0.1, 21, 0.1, 0.46, 9, 0.1, 5.7, 0.12],
+  swipe: [1, 0.1, 866, 0.1, 0.5, 0, 1.6, 0.4, 0.98],
+  ow: [1, 0.1, 1682, 0.2, 0.66, 3, 0, 1.2, 0.69],
+  wave: [1, 0.1, 1825, 1, 0.2, 0, 5, 0.2, 0.3],
+  bobbleUp: [1, 0.1, 17, 1, 0.26, 0.2, 0.1, 8, 0.66]
 };
 
-let zzfx:Function;
-
-function sfx(def:string){
-  if(!zzfx)
-    zzfx = zzfxInit();
-  zzfx(sfxDefs[def][0] * volume, ...sfxDefs[def].slice(1))
+function sfx(def: string) {
+  if (!zzfx) zzfx = zzfxInit();
+  zzfx(sfxDefs[def][0] * volume, ...sfxDefs[def].slice(1));
 }
 
-type Memory = {
-  pos: Vec3;
+const possibleUpgrades:[string, number[]][] = [
+  ["brake", [10]],
+  ["boosts", [100, 200, 500, 1000, 2000]],
+  ["boostMore", [100, 200, 500, 1000, 2000]],
+  ["clasterFaster", [100, 200, 500, 1000, 2000]],
+  ["rewind", [100, 300, 1000]],
+  ["rewindCheckpoint", [3000]],
+  ["pickup", [2000]],
+  ["friction", [100, 200, 500, 1000, 2000]],
+  ["time", [500, 1000, 2000, 5000, 10000]],
+  //["lane", [1000]]
+]
+
+const upgradeDescriptions = {
+  brake: "Brake on <b>right mouse click</b>",
+  boosts: "You can accelerate with <b>left mouse click</b> up to {0/1/2/3/4/5} times per checkpoint.",
+  boostMore: "You gain {0/25/50/75/100/125} more velocity when accelerating.",
+  clasterFaster: "You gain {0/25/50/75/100/125} more velocity when collecting a cluster.",
+  rewind: "You rewind back to previous checkpoint up to {0/1/2/3} times when crashing.",
+  rewindCheckpoint: "You get 1 more rewind when reaching checkpoint.",
+  pickup: "You can collect checkpoint from a longer disance",
+  friction: "Air friction is reduced by {0/10%/20%/30%/40%/50%}",  
+  time: "Time limit for reaching checkpoint is increased by {0/10%/20%/30%/40%/50%}",
+  //lane: "When you are in car lane, you are accelerated in the lane direction"
+}
+
+type State = {
   time: number;
-  orb: number;
+  pos: Vec3;
   vel: number;
   rot: [number, number];
+  smoothRot: [number, number];
 };
 
-let rad = Math.PI / 180;
-
-let frame = 0;
-let pos: Vec3;
-let vel: number;
-let rot: V2
-let mouseDelta: V2;
-let smoothRot: V2;
-let time = 0;
-let collected = new Uint8Array(1000);
-let collectedAmount = 0;
-let history: Memory[] = [];
-//const initialPos = [600, 300, 250];
-const initialPos = [0, 50, 0];
-const initialVel = 30;
+const rad = Math.PI / 180;
 const acc = 300;
 const heightToSpeed = 0.3;
-const drag = 0.03;
+const friction = 0.03;
 const orbSpeedBonus = 10;
 const minimumVelocity = 10;
 const accPerClick = 30;
 const slowPerClick = 30;
-const orbsToCollect = 100;
+
+let frame = 0;
+let lastTime = 0;
+let dir: Vec3 = [1, 0, 0];
+let mouseDelta = [0, 0];
+let fps = 60;
+let state: State;
+
+let lsbs = localStorage["boundlessCity"];
+
+let storage = lsbs?JSON.parse(lsbs):{
+  upgrades:{},
+  coins:100
+};
+
+function save(){
+  localStorage["boundlessCity"] = JSON.stringify({
+    upgrades,
+    coins
+  });
+}
+
+let upgrades = storage.upgrades as {[key:string]:number};
+let coins = storage.coins;
+
+function initGame(){
+  state = initState();
+  let g = {
+    time:0,
+    timeLeft:20,
+    collected: new Uint8Array(1000),
+    thisRunCoins: 0,
+    boosts:(upgrades.boosts || 0),
+    lives:(upgrades.rewind || 0) + 1,
+    previousCheckpoint:initState(),
+    checkpoint:[20, 0, -3] as Vec3,
+    checkpoints: 0,    
+    over: 0,
+    state
+  }
+  return g;
+}
+
+let game = initGame();
+
+function upgradeCost(upgrade:string){
+  let r = possibleUpgrades.find(u => u[0] == upgrade)[1][upgrades[upgrade] || 0] || 1e9;
+  //console.log(upgrade, r);
+  return r;
+}
+
+
+function initState(): State {
+  return {
+    pos: [0, 0, 0],
+    vel: 50,
+    time: 0,
+    rot: [0, 0],
+    smoothRot: [0, 0]
+  };
+}
 
 function active() {
-  return document.pointerLockElement == canvas && !won();
+  return document.pointerLockElement == canvas && !gameOver();
 }
 
-function won() {
-  return collectedAmount >= orbsToCollect;
-}
+const CRASH = 1;
+const TIMEOUT = 2;
 
-function eject() {
-  collectedAmount = Math.max(0, collectedAmount - 5);
-  if (collectedAmount == 0) time = 0;
-  pos[2] = 300;
-  vel = initialVel;
+const gameOverReasons = [
+  "",
+  "You have crashed into something solid. Or something solid has crashed into you.",
+  "You have run out of time."
+]
+
+function gameOver() {
+  return game.over;
 }
 
 function crash() {
-  console.log("crash");
   sfx("bobbleUp");
-  rewind(1);
-  //eject();
+  if(game.lives > 1){
+    game.lives --;
+    rewind();  
+  } else {
+    endGame(CRASH);
+  }
 }
 
-function remember(orb = -1) {
-  history.push({ pos, time, orb, vel, rot });
+function endGame(reason:number){
+  game.over = reason;
+  coins += game.thisRunCoins;
+  save();
+  updateUpgrades();
+  pause();
 }
 
-function collect(orb: number) {
+function collectCluster(hash: number) {
   //console.log(orb);
-  if (collected[orb]) return;
+  if (game.collected[hash]) return;
   sfx("ponk");
-  collectedAmount++;
-  vel += orbSpeedBonus;
-  if (orb >= 0) collected[orb] = 1;
-  history.push({ pos, time, orb, vel, rot });
+  game.thisRunCoins += game.checkpoints+1;
+  state.vel += orbSpeedBonus * (1 + 0.25 * (upgrades.clasterFaster || 0));
+  if (hash >= 0) game.collected[hash] = 1;
 }
 
 function fract(n) {
@@ -116,32 +196,70 @@ function hash(p: [number, number]) {
   );
 }
 
-const penaltySteps = 3;
-
-function rewind(steps) {
-  let memoriesRemained = Math.max(1, history.length - steps);
-  history = history.slice(0, memoriesRemained);
-  let lastMemory = history[history.length - 1];
-  collected.fill(0, 0);
-  collectedAmount = 0;
-
-  for (let m of history) {
-    if (m.orb >= 0) {
-      collectedAmount++;
-    }
-    collected[m.orb] = 1;
-  }
-  pos = lastMemory.pos;
-  time = lastMemory.time;
-  vel = lastMemory.vel;
-  rot = lastMemory.rot;
-  smoothRot = rot.slice() as [number, number];
-  mouseDelta = [0,0];
+function remember() {
+  game.previousCheckpoint = JSON.parse(JSON.stringify(state));
+  game.previousCheckpoint.pos = v3.copy(game.checkpoint).map(v => v*blockSize);
+  console.log(game.previousCheckpoint);
 }
 
+function rewind() {
+  Object.assign(state, JSON.parse(JSON.stringify(game.previousCheckpoint)));  
+  state.vel = Math.min(state.vel, 30);
+  mouseDelta = [0, 0];
+}
+
+function highlightCurrentLevel(s:string, level:number){
+  s = s.replace(/\{(.*)\}/, v => {
+    let vv = v.substr(1, v.length-2).split("/");
+    vv[level] = `<b style="color:white">` + vv[level] + "</b>"
+    return `<span style="color:#bbb">` + vv.join("/") + "</span>";
+  });
+  return s;
+}
+
+function pause(){
+  document.exitPointerLock();  
+}
+
+function unpause(){
+  canvas.requestPointerLock();
+}
+
+function collectCheckpoint(){
+  sfx("powerup");
+  game.checkpoints++;
+  game.boosts = upgrades.boosts || 0;
+  if(upgrades.rewindCheckpoint){
+    game.lives = Math.min(game.lives + 1, (upgrades.rewind || 0) + 1);
+  }
+  game.timeLeft += 20 * (1 + 0.1 * (upgrades.time || 0));
+  
+  let r = random(frame + v3.length(game.checkpoint));
+  remember();      
+  let normHorDir = v3.normalize([dir[0], dir[1], 0]);      
+  let shift = [r(), r(), r()].map((v,i) => Math.floor(v%20 - 10 + (i==2?-5:normHorDir[i] * 40))) as Vec3;
+  game.checkpoint = v3.add(shift, game.checkpoint);
+}
+
+function updateUpgrades(){
+  upgradesDiv.innerHTML = `
+  <div>Level</div><div>Cost</div><div> </div><div>Upgrade</div>
+  ` + possibleUpgrades.map(u => 
+    `<div>${upgrades[u[0]] || 0}/${u[1].length}</div><div>${u[1][upgrades[u[0]]||0] || "MAX"}</div>      
+    <button ${upgradeCost(u[0]) > coins?'disabled':''} onclick="buy('${u[0]}')">Buy!</button>
+    <div style="text-align: left;">${highlightCurrentLevel(upgradeDescriptions[u[0]], upgrades[u[0]] || 0)}</div>`
+    ).join("")
+  + `<div>Coins:</div><div class="coin">${coins}</div>
+  `
+}
+
+let loopId:number;
+
 window.onload = async e => {
-  let renderHQ = await prepareRender(crash, collect, collected, 2);
-  let renderLQ = await prepareRender(crash, collect, collected, 1);
+  
+
+  let renderHQ = await prepareRender(crash, collectCluster, 2);
+  let renderLQ = await prepareRender(crash, collectCluster, 1);
 
   let render = renderHQ;
 
@@ -149,42 +267,59 @@ window.onload = async e => {
   let orbsDiv = document.getElementById("orbs");
   let pauseDiv = document.getElementById("pause");
   let winDiv = document.getElementById("win");
+  upgradesDiv = document.getElementById("upgrades");
 
-  //canvas.requestPointerLock();
+  //<button ${upgradeCost(u[0]) > game.coins?"disabled":""}">Buy!</button>
+
+  window["buy"] = (s:string) => {
+    coins -= upgradeCost(s);
+    upgrades[s] = (upgrades[s] || 0) +1;
+    save();
+    updateUpgrades();    
+  }
+
+  function restart(){
+    game = initGame();
+    renderFrame();
+    runLoop();
+  }
+  
+  window["restartGame"] = () => restart();
+  
+    //canvas.requestPointerLock();
   const keyboard = new Keyboard(document);
 
   document.addEventListener("keydown", (e: KeyboardEvent) => {
     if (e.code == "Space") {
-      if (!active()) canvas.requestPointerLock();
-      else document.exitPointerLock();
+      if (!active()) unpause();
+      else pause();
     }
 
     if (e.code == "KeyR") {
-      rewind(1e6);
+      restart();
       return;
     }
 
     if (e.code == "KeyP") {
-      rewind(1);
+      rewind();
       return;
     }
 
     if (e.code == "KeyQ") {
-      render = render==renderHQ?renderLQ:renderHQ;
+      render = render == renderHQ ? renderLQ : renderHQ;
       return;
     }
-
   });
 
   canvas.addEventListener("mousedown", e => {
     if (!active()) canvas.requestPointerLock();
     else {
-      if (e.button == 0/* && collectedAmount > 0*/) {
-        collectedAmount--;
-        vel += accPerClick;
+      if (e.button == 0  && game.boosts > 0) {
+        game.boosts--;
+        state.vel += accPerClick * (1 + (upgrades.boostMore || 0) * 0.25);
       }
-      if (e.button == 2) {
-        vel = Math.max(vel - slowPerClick, minimumVelocity * 2);
+      if (e.button == 2 && upgrades.brake) {
+        state.vel = Math.max(state.vel - slowPerClick, minimumVelocity * 2);
       }
     }
   });
@@ -193,36 +328,36 @@ window.onload = async e => {
     mouseDelta[0] += e.movementX;
     mouseDelta[1] += e.movementY;
   });
+  
+  restart();
+  pause();
 
-  let lastTime = 0;
+  updateUpgrades();
 
-  vel = initialVel;
-  pos = initialPos;
-  rot = [0, 0];
-  smoothRot = [0, 0];
-  mouseDelta = [0, 0];
-  let dir: Vec3 = [1, 0, 0];
+  function renderFrame(){
+    render(state.time, state.pos, dir, game.collected, game.checkpoint, game.previousCheckpoint.pos.map(v => v/blockSize));
+  }
 
-  remember();
-  //rewind();
-
-  let loops = 0;
-  let fps = 60.
-
+  function runLoop(){
+    if(!loopId)
+      loopId = window.requestAnimationFrame(loop);
+  }
+  
   function loop(frameTime: number) {
-    pauseDiv.style.visibility = !active() && !won() ? "visible" : "hidden";
-    frame ++;
+    loopId = 0;
+    pauseDiv.style.visibility = !active() && !gameOver() ? "visible" : "hidden";
+    frame++;
 
-    winDiv.style.visibility = won() ? "visible" : "hidden";
-    if (won()) {
-      winDiv.innerHTML = `<h2>Congaturaleishuns!</h2> You have collected <b>${collectedAmount}</b> orbs in <b>${Math.floor(
-        time
-      )} seconds!</b><br/><br/> Press <b>R</b> to restart.`;
+    winDiv.style.visibility = gameOver() ? "visible" : "hidden";
+    if (gameOver()) {
+      winDiv.innerHTML = `<h2>Run complete</h2> ${gameOverReasons[game.over]} You have collected <b>${game.thisRunCoins}</b> coins in <b>${Math.floor(
+        state.time
+      )} seconds!</b><br/><br/> <button onclick="restartGame()"><b>R</b>estart</button>`;
       return;
     }
 
-    if (!active() && loops > 0) {
-      window.requestAnimationFrame(loop);
+    if (!active() && frame > 1) {
+      runLoop();
       return;
     }
 
@@ -234,30 +369,32 @@ window.onload = async e => {
 
     lastTime = frameTime;
 
-    time += dTime;
+    state.time += dTime;
+    game.timeLeft -= dTime;
 
-    mouseDelta = mouseDelta.map(d => Math.sign(d) * Math.min(30, Math.abs(d) * dTime * 60)) as V2;
+    if(game.timeLeft <=0){
+      endGame(TIMEOUT);
+      runLoop();
+      return;
+    }
 
-    //vel -= length(mouseDelta) * 0.01;
+    mouseDelta = mouseDelta.map(
+      d => Math.sign(d) * Math.min(30, Math.abs(d) * dTime * 60)
+    ) as V2;
 
-    rot[0] = rot[0] - mouseDelta[0] * 0.1;
-    rot[1] = Math.max(-89.999, Math.min(89.999, rot[1] - mouseDelta[1] * 0.1));
+    state.rot[0] = state.rot[0] - mouseDelta[0] * 0.1;
+    state.rot[1] = Math.max(
+      -89.999,
+      Math.min(89.999, state.rot[1] - mouseDelta[1] * 0.1)
+    );
 
-    //lastRot = [0,0];
+    let turn = Math.min(1, dTime * 30);
 
-    let turn = Math.min(1, dTime * 30)
+    state.smoothRot = state.smoothRot.map(
+      (prevSmooth, i) => prevSmooth * (1 - turn) + state.rot[i] * turn
+    ) as V2;    
 
-    smoothRot = smoothRot.map((prevSmooth, i) => prevSmooth * (1 - turn) + rot[i] * turn ) as V2;
-
-    //smoothRot = rot.slice() as V2;
-
-    mouseDelta = [0,0];
-
-    /*console.log("-");
-    console.log(...mouseDelta);
-    console.log(...rot);*/
-
-    let [yaw,pitch] = smoothRot.map(v => v * rad);
+    let [yaw, pitch] = state.smoothRot.map(v => v * rad);
 
     dir = v3.normalize([
       Math.cos(pitch) * Math.cos(yaw),
@@ -265,37 +402,49 @@ window.onload = async e => {
       Math.sin(pitch)
     ]);
 
-    mouseDelta = [0,0];
+    mouseDelta = [0, 0];
 
     if (keyboard.pressed["KeyO"]) {
-      vel += acc * dTime;
+      state.vel += acc * dTime;
     }
 
     if (keyboard.pressed["KeyL"]) {
-      vel = Math.max(0, vel - acc * dTime);
+      state.vel = Math.max(0, state.vel - acc * dTime);
     }
 
-    vel *= 1 - drag * dTime;
+    state.vel *= 1 - (friction * (1 - (upgrades.friction || 0) * 0.1)) * dTime;
 
-    if (vel <= minimumVelocity) {
-      let drop = minimumVelocity - vel / 100;
-      pos[2] -= drop * heightToSpeed;
-      vel += drop;
+    if (state.vel <= minimumVelocity) {
+      let drop = minimumVelocity - state.vel / 100;
+      state.pos[2] -= drop * heightToSpeed;
+      state.vel += drop;
     }
 
-    let delta = v3.mulScalar(dir, vel * dTime);
-    vel -= delta[2] * heightToSpeed;
-    pos = v3.add(pos, delta);
-    if(frame%5 == 0){
-      statsDiv.innerText = `Time: ${Math.floor(time)} Position: ${pos
+    let delta = v3.mulScalar(dir, state.vel * dTime);
+    state.vel -= delta[2] * heightToSpeed;
+    state.pos = v3.add(state.pos, delta);
+    if (frame % 5 == 0) {
+      statsDiv.innerText = `Time: ${Math.floor(
+        state.time
+      )} Position: ${state.pos
         .map(n => Math.round(n))
-        .join(",")} Velocity: ${Math.floor(vel)} FPS: ${Math.round(fps)}`;
-      orbsDiv.innerText = `Orbs: ${collectedAmount}/${orbsToCollect}`;
+        .join(",")} Velocity: ${Math.floor(state.vel)} FPS: ${Math.round(fps)}`;
+      orbsDiv.innerHTML = `        
+      <div>Coins: <span class="coin">${game.thisRunCoins}</span></div>
+      <div>Mult.: <b>${game.checkpoints + 1}</b></div>
+      <div>Lives: <b style="color:#0f0">${game.lives}</b></div>
+      <div>Boosts: <b style="color:#f00">${game.boosts}</b></div>
+      <div>Time: <b style="color:#8ff">${Math.floor(game.timeLeft)}</b></div>
+      `;
     }
-    render(time, pos, dir);
-    loops++;
-    window.requestAnimationFrame(loop);
+
+    if(v3.distance(game.checkpoint, v3.divScalar(state.pos, blockSize)) < (1. * (1 + (upgrades.pickup ||0) * 1))){
+      collectCheckpoint();
+    }
+
+    renderFrame();
+    runLoop();
   }
 
-  window.requestAnimationFrame(loop);
+  runLoop();
 };

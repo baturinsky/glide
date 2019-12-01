@@ -23,13 +23,11 @@ const int STAR = 4;
 const int CHECKPOINT = 8;
 
 uniform mat4 u_worldViewProjection;
-uniform mat4 u_inverseCamera;
 uniform float u_time;
 uniform vec3 u_origin;
 uniform vec3 u_eye;
 uniform vec3 u_citySize;
 uniform vec3 u_checkpoint;
-uniform vec3 u_previousCheckpoint;
 uniform float u_blockSize;
 uniform float u_a;
 uniform float u_b;
@@ -51,8 +49,6 @@ vec3 corner;
 vec3 speed;
 float columnID;
 bool isElevator;
-int sideID;
-int cubeOrder;
 
 float rand(float n){return fract(sin(n + 0.5) * 43758.5453123);}
 
@@ -111,23 +107,16 @@ mat4 rotationZ( in float angle ) {
 							0,				0,		0,	1);
 }
 
-vec2 uvFrom(vec3 corner){
-  return vec2(
-    ((sideID==2 || sideID==3)?corner.x:-corner.y)*((sideID==3 || sideID==5)?-1.:1.) * 0.5 + 0.5,
-    ((sideID==0 || sideID==1)?corner.y:corner.z) * 0.5 + 0.5
-  );
-}
-
 bool isPillar(vec3 slot){
   return mod(slot.x, 6.) == 0. && mod(slot.y, 6.) == 0.;
 }
 
 bool hasBlockIn(vec3 slot){
-  return isPillar(slot) || (rand3(slot) > .99 - fract(slot.x/50.)*0.15);
+  return isPillar(slot) || rand3(slot) > 0.92;
 }
 
 bool hasStarIn(vec3 slot){
-  return mod(slot, 2.) == vec3(1., 0., 1.) && !isPillar(slot) && rand3(slot) < 0.3;
+  return mod(slot, 2.) == vec3(1., 0., 1.) && !isPillar(slot) && rand3(slot) < 0.2;
 }
 
 vec3 hasSpeed(vec3 slot){
@@ -141,7 +130,7 @@ vec3 hasSpeed(vec3 slot){
       :smod.xz==vec2(1., 0.)?vec3(0., 1., 0.)
       :vec3(0.);
 
-    float laneRnd = rand3(slot * (dir - 1.) * 0.231) * 1000.;
+    float laneRnd = rand3(slot * (dir - 1.) * 0.301) * 1000.;
     if(laneRnd<100.){
       return (laneRnd - 50.) * dir * (dir.z == 0.?3.:.5);
     } else
@@ -240,27 +229,8 @@ void makeAttachment(){
 }
 
 void main() {
-  cubeOrder = gl_VertexID / 36;
-
-  sideID = gl_VertexID % 36 / 6;
-
-  if(cubeOrder == 0){
-    vec3 displacement = u_checkpoint * u_blockSize - u_eye;
-    vec3 position = normalize(displacement) * 10. + u_eye;
-    vec4 cam = u_inverseCamera * vec4(position, 1.);
-    if(cam.z < -length(cam.xy)){
-      gl_Position = u_worldViewProjection * vec4(position, 1.);      
-      gl_Position.xy = clamp(gl_Position.xy, -gl_Position.w*0.95, gl_Position.w*0.95);
-    } else {
-      float l = max(abs(cam.x), abs(cam.y)) / 9.5;
-      gl_Position = vec4(cam.x / l, cam.y / l, 0.3, 10.);
-    }
-    v_uv = vec2(0.5);
-    v_flag = CHECKPOINT;
-    gl_Position.xy += vec2[](vec2(0., -.2), vec2(0.2, 0.4), vec2(-0.2, 0.4))[gl_VertexID%3] * max(0.5, (1500. / (1000. + length(displacement))));
-    gl_Position.y += sin(u_time * 5.) * 0.1;
-    return;
-  }
+  int sideID = gl_VertexID % 36 / 6;
+  int cubeOrder = gl_VertexID / 36;
 
   int cw = int(u_citySize[0]);
   int cd = int(u_citySize[1]);
@@ -268,16 +238,7 @@ void main() {
 
   vec3 slot = vec3(cubeOrder % cw, cubeOrder / cw % cd, cubeOrder / cw / cd % ch) + u_origin;
 
-  bool isNearPreviousCheckpoint = distance(slot, u_previousCheckpoint) <= 2.;
-  if(isNearPreviousCheckpoint)
-    return;
-
-  float distToCheckpoint = distance(slot, u_checkpoint);
-  
-  bool isCheckpoint = distToCheckpoint <= .1;
-
-  if(!isCheckpoint && distToCheckpoint <= 2.)
-    return;
+  bool isCheckpoint = u_checkpoint == slot;
 
   speed = hasSpeed(slot);
 
@@ -292,9 +253,6 @@ void main() {
     slot = slot - floor(shift / u_blockSize);
   }
 
-  if(isCheckpoint)
-    shift *= 0.;
-
   v_slot = slot;
 
   columnID = rand2(slot.xy);
@@ -307,7 +265,7 @@ void main() {
 
   bvec3 connector;
 
-  if(!isElevator && !isBlock && !isCheckpoint){  
+  if(!isElevator && !isBlock){  
     bool testHorCon = !moving && rand(v_cubeID * 512.) > 0.5;
 
     if(testHorCon)
@@ -355,8 +313,7 @@ void main() {
 
   if(isCheckpoint){
     v_flag = v_flag | CHECKPOINT;
-    v_uv = uvFrom(corner);
-    corner *= vec3(0.2, 0.6, 0.4);
+    corner.y *= vec2(0.2, 0.6, 0.4);
     corner = (rotationZ(u_time) * vec4(corner, 1.)).xyz;
   } else if(hasStarIn(slot)){
     float r = v_cubeID + float(gl_VertexID % 36) + 11.;
@@ -411,22 +368,44 @@ void main() {
     }
   }
 
+  if(!isElevator){
+    v_uv.x = ((sideID==2 || sideID==3)?corner.x:-corner.y)*((sideID==3 || sideID==5)?-1.:1.) * 0.5 + 0.5;  
+    v_uv.y = ((sideID==0 || sideID==1)?corner.y:corner.z) * 0.5 + 0.5;
+  }
+
+  vec2 edges0 = vec2(rand(slot.x), rand(slot.y)) - 1.;
+  vec2 edges1 = vec2(rand(slot.x+1.), rand(slot.y+1.)) + 1.;
   
-  if(!isElevator && !isCheckpoint){
-    v_uv = uvFrom(corner);
-  }
+  vec2 corner01 = corner.xy * 0.5 + 0.5;
+  corner.xy = edges0 * (1. - corner01) + edges1 * corner01;
 
-  if(!isCheckpoint){
-    vec2 edges0 = vec2(rand(slot.x), rand(slot.y)) - 1.;
-    vec2 edges1 = vec2(rand(slot.x+1.), rand(slot.y+1.)) + 1.;
-    
-    vec2 corner01 = corner.xy * 0.5 + 0.5;
-    corner.xy = edges0 * (1. - corner01) + edges1 * corner01;
-  }
-
-  corner *= u_blockSize * 0.99999;
+  corner *= u_blockSize;
+  corner *= 0.99999;
   vec3 position = corner * 0.5;
   position += slot * u_blockSize + shift;  
   v_position = position;
   gl_Position = u_worldViewProjection * vec4(position, 1.);  
 }
+
+    //corner = (rotationZ(radians((corner.z>0.) != (mod(slot.z, 2.) == 0.)?5.:-5.)) * vec4(corner, 1.)).xyz;
+
+  //(vec2(corner.x<0.?rand(slot.x):rand(slot.x + 1.), corner.y<0.?rand(slot.y):rand(slot.y + 1.)) - 0.5) * 1.5;
+
+  //corner = (rotation * vec4(corner, 1.)).xyz;
+  //corner *= rand(float(cubeID*3)+0.2) * 2.;
+
+  //position += vec3(cubeID%10, cubeID/10%10, cubeID/100%10) * 100.;
+  
+  //position += randVec3(float(cubeID)) * vec3(2., 2., 0.5) * 3000. + vec3(100, 100, -500.);
+
+  //v_normal = vec3(0., -1., 0.);
+  //v_color = vec4(v_normal + vec3(1.), 1.);
+
+  //v_normal = vec3(0.);
+
+  //v_normal = vec3(0.,0.,1.);
+  
+  //vec4 v_position = u_worldViewProjection * position;
+  //v_color = vec4(float((color>>16)&u255)/255., float((color>>8)&u255)/255., float(color&u255)/255., 1.0);
+  //gl_Position = position;
+  //gl_Position = v_position;

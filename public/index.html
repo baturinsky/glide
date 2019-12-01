@@ -34,9 +34,11 @@
     text-shadow: 2px 2px 1px black;
   }
 
-  .orbs{
+  .orbs {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
     font-family: 'Courier New', Courier, monospace;
-    font-size: 32pt;
+    font-size: 26pt;
     position:fixed;
     top:0px;
     left:0px;
@@ -61,12 +63,47 @@
     padding: 0px;
     margin: 50px;
     visibility: hidden;
+    pointer-events: none;
+    padding: 10px;
   }
 
   .pause > h2{
     color:rgba(0, 255, 100, 1);
     text-shadow: 1px 1px 1px black;
   }
+
+  .upgrades{
+    display: grid;
+    grid-template-columns: 100px 100px 100px auto;    
+  }
+
+  .upgrades > div{
+    margin: 5px;
+  }
+
+  .coin{
+    color:yellow;
+    font-weight: bold;
+  }
+
+  button{
+    pointer-events: all;
+    background: black;
+    border: solid 1px #888;
+    cursor:pointer;
+    color:white;
+  }  
+
+  button:hover{
+    background: #333;
+  }
+
+  button:disabled{
+    background: none;
+    cursor: not-allowed;
+    opacity: 0.5;
+    border: solid 1px #333;
+  }      
 
 </style>
 </head>
@@ -77,12 +114,11 @@
   <div class="stats" id="stats"></div>
   <div class="pause" id="pause">
     <h2>A Boundless City</h2>
-    <b>Paused</b><br/><br/>
-    Collect black orbs ⚫ as fast as possible.<br/>
-    Turn with with mouse. LMB click to accelerate (costs 1 orb), RMB click to slow down (free).<br/>
-    You also get a "free" speed boost each time you collect an orb. Crashing teleports you up, but costs 5 orbs.<br/>
-    <b>Space</b> toggles pause. <b>Q</b> toggles quality. R restarts game.<br/>
-    <br/>
+    <span style="color:#f00; font-weight: bold;">Red clusters</span> give speed boost and 1 <span class="coin">coin</span>.<br/>
+    <span style="color:#0f0; font-weight: bold;">Green checkpoints</span> give 
+    60 seconds to time limit and +1 to <span class="coin">coin</span> multiplier.<br/>
+    <b>Space</b> toggles pause. <b>Q</b> toggles quality (specifically antialiasing). R restarts the game.<br/><br/>
+    <div class="upgrades" id="upgrades"></div>
   </div>
   <div class="pause" id="win"></div>
 </body>
