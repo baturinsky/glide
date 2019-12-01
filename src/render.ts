@@ -418,10 +418,10 @@ function makeTheNoise(programs: [string, string]) {
 function createText(): WebGLTexture {
   const ctx = document.createElement("canvas").getContext("2d");
   let texts = [
+    "Music by Ashley Thorpe (The Soundsmith)",
     "無限の都市",
-    "Music by Ashley Thorpe",
-    "एक असीम शहर",
     "Добро пожаловать в Омск",
+    "एक असीम शहर",
     "Design&code by @baturinsky",
     "Thanks to Procjam Discord",
     "Written in GLSL (mostly)",
@@ -430,10 +430,11 @@ function createText(): WebGLTexture {
   ctx.canvas.width = 1024;
   ctx.canvas.height = 512;
   ctx.fillStyle = "white";
-  ctx.textAlign = "center";
   ctx.font = "bold 48px Verdana";
+  ctx.scale(0.85, 1);
   for (let i = 0; i < 8; i++) {
-    ctx.fillText(texts[i % 8], (ctx.canvas.width / 2) | 0, 64 * (0.5 + i));
+    ctx.fillText(texts[i % 8], 0, 64 * (0.5 + i));
+    ctx.scale(1, 1);
   }
   let canvas = ctx.canvas;
   let tex = twgl.createTexture(gl, { src: canvas, wrap: gl.REPEAT });

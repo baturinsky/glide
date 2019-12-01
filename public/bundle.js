@@ -5036,10 +5036,10 @@
     function createText() {
         const ctx = document.createElement("canvas").getContext("2d");
         let texts = [
+            "Music by Ashley Thorpe (The Soundsmith)",
             "無限の都市",
-            "Music by Ashley Thorpe",
-            "एक असीम शहर",
             "Добро пожаловать в Омск",
+            "एक असीम शहर",
             "Design&code by @baturinsky",
             "Thanks to Procjam Discord",
             "Written in GLSL (mostly)",
@@ -5048,10 +5048,11 @@
         ctx.canvas.width = 1024;
         ctx.canvas.height = 512;
         ctx.fillStyle = "white";
-        ctx.textAlign = "center";
         ctx.font = "bold 48px Verdana";
+        ctx.scale(0.85, 1);
         for (let i = 0; i < 8; i++) {
-            ctx.fillText(texts[i % 8], (ctx.canvas.width / 2) | 0, 64 * (0.5 + i));
+            ctx.fillText(texts[i % 8], 0, 64 * (0.5 + i));
+            ctx.scale(1, 1);
         }
         let canvas = ctx.canvas;
         let tex = createTexture(gl, { src: canvas, wrap: gl.REPEAT });
@@ -5197,7 +5198,7 @@
         clasterFaster: "You gain {0/25/50/75/100/125} more velocity when collecting a cluster.",
         rewind: "You rewind back to previous checkpoint up to {0/1/2/3} times when crashing.",
         rewindCheckpoint: "You get 1 more rewind when reaching checkpoint.",
-        pickup: "You can collect checkpoint from a longer disance",
+        pickup: "You can collect checkpoint from a longer distance",
         friction: "Air friction is reduced by {0/10%/20%/30%/40%/50%}",
         time: "Time limit for reaching checkpoint is increased by {0/10%/20%/30%/40%/50%}"
         //lane: "When you are in car lane, you are accelerated in the lane direction"
@@ -5221,21 +5222,24 @@
         ? JSON.parse(lsbs)
         : {
             upgrades: {},
-            coins: 100
+            coins: 100,
+            mute: false
         };
     function save(bonusCoins = 0) {
         localStorage["boundlessCity"] = JSON.stringify({
             upgrades,
+            mute,
             coins: coins + bonusCoins
         });
     }
     let upgrades = storage.upgrades;
     let coins = storage.coins;
+    let mute = !!storage.mute;
     function initGame() {
         state = initState();
         let g = {
             time: 0,
-            timeLeft: 20,
+            timeLeft: 40 * (1 + 0.1 * (upgrades.time || 0)),
             collected: new Uint8Array(1000),
             thisRunCoins: 0,
             boosts: upgrades.boosts || 0,
@@ -5348,6 +5352,18 @@
             (1 + 0.2 * game.checkpoints));
         game.checkpoint = add(shift, game.checkpoint).map(n => Math.floor(n));
     }
+    function toggleMusic() {
+        mute = !mute;
+        if (!music)
+            return;
+        if (mute) {
+            music.context.suspend();
+        }
+        else {
+            music.context.resume();
+        }
+        save();
+    }
     function updateUpgrades() {
         upgradesDiv.innerHTML =
             `
@@ -5407,19 +5423,15 @@
                 return;
             }
             if (e.code == "KeyM") {
-                if (!music)
-                    return;
-                if (music.context.state === "running") {
-                    music.context.suspend();
-                }
-                else {
-                    music.context.resume();
-                }
+                toggleMusic();
             }
         });
         canvas.addEventListener("mousedown", (e) => __awaiter(void 0, void 0, void 0, function* () {
-            if (!music)
+            if (!music) {
                 music = yield playFile("/Boundless_City.mp3");
+                if (mute)
+                    music.context.suspend();
+            }
             if (!active())
                 canvas.requestPointerLock();
             else {
@@ -5511,7 +5523,7 @@
       `;
             }
             if (distance(game.checkpoint, divScalar(state.pos, blockSize)) <
-                1 * (1 + (upgrades.pickup || 0) * 1)) {
+                1 * (1 + (upgrades.pickup || 0) * 2)) {
                 collectCheckpoint();
             }
             renderFrame();

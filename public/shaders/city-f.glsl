@@ -128,14 +128,15 @@ void drawWindows(){
     window = v_side>=2 && windowness >= 0.;    
   }
 
+  vec2 windowId;
   if(window){
-    vec2 windowId = floor(wuv * v_windows);
+    windowId = floor(wuv * v_windows);
     bool lit = v_windows == vec2(1.) || fract(rand2(windowId*0.01 + v_cubeID * 101. + float(v_side) * 0.13) * (u_time / 1000. + 1.)) > 0.3;
     if(!lit)
       window = false;
   }
   
-  normal.a = (window?windowness:0.) * (0.8 + sin(u_musicTime/0.35) * 0.1);
+  normal.a = (window?windowness:0.) * (0.8 + sin((u_musicTime / 0.357 / 4. + mod(v_slot.x + v_slot.y, 2.) ) * PI) * 0.2);
 }
 
 void main() {
@@ -151,7 +152,7 @@ void main() {
   }
 
 
-  if(!gl_FrontFacing){
+  if(gl_FrontFacing == false){
     outEverything.b = 1.;
     return;  
   }

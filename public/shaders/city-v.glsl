@@ -201,7 +201,7 @@ void makeSlope(){
   if(corner.z < 0.)
     return;
   int slopeDir = int(rand(v_cubeID*253.) * 4.);  
-  float slope = -1. + 1.8 * rand(v_cubeID*253.);
+  float slope = -0.2 + 1.6 * rand(v_cubeID*253.);
   if(dot(kernel[slopeDir], corner.xy)>0.){
     corner.z = -1.;
     v_windows *= 0.;
@@ -274,7 +274,7 @@ void main() {
 
   float distToCheckpoint = distance(slot, u_checkpoint);
   
-  bool isCheckpoint = distToCheckpoint <= .1;
+  bool isCheckpoint = distToCheckpoint <= .3;
 
   if(!isCheckpoint && distToCheckpoint <= 2.)
     return;

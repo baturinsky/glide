@@ -59,7 +59,7 @@ const upgradeDescriptions = {
   rewind:
     "You rewind back to previous checkpoint up to {0/1/2/3} times when crashing.",
   rewindCheckpoint: "You get 1 more rewind when reaching checkpoint.",
-  pickup: "You can collect checkpoint from a longer disance",
+  pickup: "You can collect checkpoint from a longer distance",
   friction: "Air friction is reduced by {0/10%/20%/30%/40%/50%}",
   time:
     "Time limit for reaching checkpoint is increased by {0/10%/20%/30%/40%/50%}"
@@ -96,24 +96,27 @@ let storage = lsbs
   ? JSON.parse(lsbs)
   : {
       upgrades: {},
-      coins: 100
+      coins: 100,
+      mute: false
     };
 
 function save(bonusCoins = 0) {
   localStorage["boundlessCity"] = JSON.stringify({
     upgrades,
+    mute,
     coins: coins + bonusCoins
   });
 }
 
 let upgrades = storage.upgrades as { [key: string]: number };
 let coins = storage.coins;
+let mute = !!storage.mute;
 
 function initGame() {
   state = initState();
   let g = {
     time: 0,
-    timeLeft: 20,
+    timeLeft: 40 * (1 + 0.1 * (upgrades.time || 0)),
     collected: new Uint8Array(1000),
     thisRunCoins: 0,
     boosts: upgrades.boosts || 0,
@@ -260,6 +263,17 @@ function collectCheckpoint() {
   game.checkpoint = v3.add(shift, game.checkpoint).map(n => Math.floor(n));
 }
 
+function toggleMusic(){
+  mute = !mute;
+  if (!music) return;
+  if (mute) {
+    music.context.suspend();
+  } else {
+    music.context.resume();
+  }
+  save();
+}
+
 function updateUpgrades() {
   upgradesDiv.innerHTML =
     `
@@ -344,17 +358,15 @@ window.onload = async e => {
     }
 
     if (e.code == "KeyM") {
-      if (!music) return;
-      if (music.context.state === "running") {
-        music.context.suspend();
-      } else {
-        music.context.resume();
-      }
+      toggleMusic();
     }
   });
 
   canvas.addEventListener("mousedown", async e => {
-    if (!music) music = await playFile("/Boundless_City.mp3");
+    if (!music) {
+      music = await playFile("/Boundless_City.mp3");
+      if (mute) music.context.suspend();
+    }
     if (!active()) canvas.requestPointerLock();
     else {
       if (e.button == 0 && game.boosts > 0) {
@@ -494,7 +506,7 @@ window.onload = async e => {
 
     if (
       v3.distance(game.checkpoint, v3.divScalar(state.pos, blockSize)) <
-      1 * (1 + (upgrades.pickup || 0) * 1)
+      1 * (1 + (upgrades.pickup || 0) * 2)
     ) {
       collectCheckpoint();
     }
