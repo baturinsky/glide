@@ -52,13 +52,13 @@ const possibleUpgrades: [string, number[]][] = [
 const upgradeDescriptions = {
   brake: "Brake on <b>right mouse click</b>",
   boosts:
-    "You can accelerate with <b>left mouse click</b> up to {0/1/2/3/4/5} times per checkpoint.",
-  boostMore: "You gain {0/25/50/75/100/125} more velocity when accelerating.",
+    "You can boost your velocity with <b>left mouse click</b> up to {0/1/2/3/4/5} times per checkpoint.",
+  boostMore: "You gain {0/25/50/75/100/125} more velocity when boosting.",
   clasterFaster:
     "You gain {0/25/50/75/100/125} more velocity when collecting a cluster.",
   rewind:
     "You rewind back to previous checkpoint up to {0/1/2/3} times when crashing.",
-  rewindCheckpoint: "You get 1 more rewind when reaching checkpoint.",
+  rewindCheckpoint: "You get 1 more rewind when reaching a checkpoint.",
   pickup: "You can collect checkpoint from a longer distance",
   friction: "Air friction is reduced by {0/10%/20%/30%/40%/50%}",
   time:
@@ -364,7 +364,7 @@ window.onload = async e => {
 
   canvas.addEventListener("mousedown", async e => {
     if (!music) {
-      music = await playFile("/Boundless_City.mp3");
+      music = await playFile("/Boundless_City_v2.mp3");
       if (mute) music.context.suspend();
     }
     if (!active()) canvas.requestPointerLock();
