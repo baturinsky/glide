@@ -135,14 +135,9 @@ export async function playFile(uri: string) {
 
   source.connect(gainNode);
   gainNode.connect(audioCtx.destination);  
-  
-  let started = false;
 
-  return {context:audioCtx, gain:gainNode, start:() => {
-    if(!started){
-      console.log(123);
-      started = true;
-      audio.play();
-    }
-  }};
+  audio.play();
+  
+
+  return {context:audioCtx, gain:gainNode};
 }

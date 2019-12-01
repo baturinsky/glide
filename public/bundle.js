@@ -4767,14 +4767,8 @@
             gainNode.gain.setValueAtTime(1.0, 0);
             source.connect(gainNode);
             gainNode.connect(audioCtx.destination);
-            let started = false;
-            return { context: audioCtx, gain: gainNode, start: () => {
-                    if (!started) {
-                        console.log(123);
-                        started = true;
-                        audio.play();
-                    }
-                } };
+            audio.play();
+            return { context: audioCtx, gain: gainNode };
         });
     }
 
@@ -5348,7 +5342,9 @@
         let r = random(frame + length$1(game.checkpoint));
         remember();
         let normHorDir = normalize([dir[0], dir[1], 0]);
-        let shift = [r(), r(), r()].map((v, i) => Math.floor((v % 1500) / 100 - 10 + (i == 2 ? -3 + game.checkpoints : normHorDir[i] * 30)) *
+        let shift = [r(), r(), r()].map((v, i) => Math.floor((v % 1500) / 100 -
+            10 +
+            (i == 2 ? -3 + game.checkpoints : normHorDir[i] * 30)) *
             (1 + 0.2 * game.checkpoints));
         game.checkpoint = add(shift, game.checkpoint).map(n => Math.floor(n));
     }
@@ -5366,8 +5362,8 @@
   `;
     }
     let loopId;
+    let music;
     window.onload = (e) => __awaiter(void 0, void 0, void 0, function* () {
-        let music = yield playFile("/Boundless_City.mp3");
         let renderHQ = yield prepareRender(crash, collectCluster, 2);
         let renderLQ = yield prepareRender(crash, collectCluster, 1);
         let render = renderHQ;
@@ -5411,6 +5407,8 @@
                 return;
             }
             if (e.code == "KeyM") {
+                if (!music)
+                    return;
                 if (music.context.state === "running") {
                     music.context.suspend();
                 }
@@ -5419,8 +5417,9 @@
                 }
             }
         });
-        canvas.addEventListener("mousedown", e => {
-            music.start();
+        canvas.addEventListener("mousedown", (e) => __awaiter(void 0, void 0, void 0, function* () {
+            if (!music)
+                music = yield playFile("/Boundless_City.mp3");
             if (!active())
                 canvas.requestPointerLock();
             else {
@@ -5432,7 +5431,7 @@
                     state.vel = Math.max(state.vel - slowPerClick, minimumVelocity * 2);
                 }
             }
-        });
+        }));
         canvas.addEventListener("mousemove", (e) => {
             mouseDelta[0] += e.movementX;
             mouseDelta[1] += e.movementY;
@@ -5441,7 +5440,7 @@
         pause();
         updateUpgrades();
         function renderFrame() {
-            render(state.time, state.pos, dir, game.collected, game.checkpoint, game.previousCheckpoint.pos.map(v => v / blockSize), music.context.currentTime);
+            render(state.time, state.pos, dir, game.collected, game.checkpoint, game.previousCheckpoint.pos.map(v => v / blockSize), music ? music.context.currentTime : 0);
         }
         function runLoop() {
             if (!loopId)

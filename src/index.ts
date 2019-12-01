@@ -102,7 +102,7 @@ let storage = lsbs
 function save(bonusCoins = 0) {
   localStorage["boundlessCity"] = JSON.stringify({
     upgrades,
-    coins:coins + bonusCoins
+    coins: coins + bonusCoins
   });
 }
 
@@ -250,11 +250,14 @@ function collectCheckpoint() {
   let normHorDir = v3.normalize([dir[0], dir[1], 0]);
   let shift = [r(), r(), r()].map(
     (v, i) =>
-      Math.floor((v % 1500) / 100 - 10 + (i == 2 ? -3 + game.checkpoints: normHorDir[i] * 30)) *
+      Math.floor(
+        (v % 1500) / 100 -
+          10 +
+          (i == 2 ? -3 + game.checkpoints : normHorDir[i] * 30)
+      ) *
       (1 + 0.2 * game.checkpoints)
   ) as Vec3;
   game.checkpoint = v3.add(shift, game.checkpoint).map(n => Math.floor(n));
-  
 }
 
 function updateUpgrades() {
@@ -282,10 +285,12 @@ function updateUpgrades() {
 }
 
 let loopId: number;
+let music: {
+  context: AudioContext;
+  gain: GainNode;
+};
 
 window.onload = async e => {
-  let music = await playFile("/Boundless_City.mp3");
-
   let renderHQ = await prepareRender(crash, collectCluster, 2);
   let renderLQ = await prepareRender(crash, collectCluster, 1);
 
@@ -339,6 +344,7 @@ window.onload = async e => {
     }
 
     if (e.code == "KeyM") {
+      if (!music) return;
       if (music.context.state === "running") {
         music.context.suspend();
       } else {
@@ -347,8 +353,8 @@ window.onload = async e => {
     }
   });
 
-  canvas.addEventListener("mousedown", e => {
-    music.start();
+  canvas.addEventListener("mousedown", async e => {
+    if (!music) music = await playFile("/Boundless_City.mp3");
     if (!active()) canvas.requestPointerLock();
     else {
       if (e.button == 0 && game.boosts > 0) {
@@ -379,7 +385,7 @@ window.onload = async e => {
       game.collected,
       game.checkpoint,
       game.previousCheckpoint.pos.map(v => v / blockSize),
-      music.context.currentTime
+      music ? music.context.currentTime : 0
     );
   }
 
@@ -396,7 +402,9 @@ window.onload = async e => {
     if (gameOver()) {
       winDiv.innerHTML = `<h2>Run complete</h2> ${
         gameOverReasons[game.over]
-      } <br/> You have collected <b>${game.thisRunCoins}</b> coins in <b>${Math.floor(
+      } <br/> You have collected <b>${
+        game.thisRunCoins
+      }</b> coins in <b>${Math.floor(
         state.time
       )} seconds!</b><br/><br/> <button onclick="restartGame()"><b>R</b>estart</button>`;
       return;
